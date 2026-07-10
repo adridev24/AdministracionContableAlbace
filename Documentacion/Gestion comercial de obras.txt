@@ -1,0 +1,23 @@
+24/05/2026
+ENDPOINT GESION COMERCIAL OBRAS
+POST /api/acuerdos
+GET /api/acuerdos/{id}
+GET /api/acuerdos/cliente/{clienteExternoId}
+GET /api/acuerdos/obra/{obraExternaId}
+POST /api/acuerdos/{id}/plan-pago
+GET /api/acuerdos/{id}/estado-comercial
+POST /api/pagos-comerciales
+POST /api/pagos-comerciales/{id}/aplicar
+GET /api/pagos-comerciales/cuota/{cuotaId}/aplicaciones
+GET /api/clientes/{clienteExternoId}/saldo-comercial
+GET /api/obras/{obraExternaId}/saldo-comercial
+GET /api/cuotas/vencidas
+GET /api/cuotas/pendientes
+
+Validación y negocio incluidos
+Importes mayores a cero
+No se permite sobreaplicación de pagos
+No se permiten pagos sobre acuerdos anulados
+No se puede crear plan sobre acuerdos anulados o finalizados
+No se generan asientos ni movimientos contables
+Mantenimiento de saldo comercial por cliente/obra/acuerdo

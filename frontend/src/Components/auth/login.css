@@ -1,0 +1,43 @@
+/* Login.css: layout-specific styles only.
+   Generic form controls moved to shared/form.css */
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: var(--color-bg-light);
+}
+
+.login-card {
+  background: white;
+  padding: 36px 28px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  width: 100%;
+  max-width: 420px;
+}
+
+.login-logo {
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 16px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-header h2 {
+  color: var(--color-text-dark);
+  font-size: 1.15rem;
+  text-align: center;
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+.login-form button {
+  display: block;
+  margin: 22px auto 0;
+}

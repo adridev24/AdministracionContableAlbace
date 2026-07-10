@@ -1,0 +1,23 @@
+# visual studio & vs code
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# compilación y bindeo
+bin/
+obj/
+
+# publicar / despliegue
+publish/
+store/
+
+# secretos y configuraciones locales (¡MUY IMPORTANTE!)
+appsettings.Development.json
+*.env
+.jsonusers/
+
+# herramientas de .net core
+.dotnet/

@@ -1,0 +1,93 @@
+/* Shared form styles (inspirado en Login.css y comercial.css) */
+
+/* Compatibilidad con clases existentes */
+.form-group,
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label,
+.form-field label {
+  color: var(--color-albace-grey);
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.form-group input,
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #dfe5ee;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text-dark);
+  box-sizing: border-box;
+  box-shadow: none;
+}
+
+.form-group input:focus,
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: none;
+  border-color: rgba(236,102,36,0.5);
+  box-shadow: 0 0 0 4px rgba(236,102,36,0.08);
+}
+
+.form-field textarea,
+.form-group textarea {
+  resize: vertical;
+}
+
+.form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.form-footer.full-width {
+  width: 100%;
+}
+
+.form-error {
+  color: #b91c1c;
+  margin: 0 0 0.75rem;
+}
+
+/* Botones primarios compartidos */
+.btn-primary {
+  background: var(--color-albace-orange);
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  width: auto;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.btn-primary[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary:hover:not([disabled]) {
+  transform: translateY(-2px);
+  background: #d95213;
+}
+
+@media (max-width: 780px) {
+  .form-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+}
