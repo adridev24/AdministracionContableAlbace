@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using BudgetControl.Api.Data;
 using BudgetControl.Api.Services;
+using BudgetControl.Api.Services.Accounting;
 using BudgetControl.Api.Services.Commercial;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -79,6 +80,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContext, CurrentUserService>();
 builder.Services.AddScoped<IComercialService, ComercialService>();
 builder.Services.AddScoped<IPagoComercialService, PagoComercialService>();
+builder.Services.AddScoped<ICuentasContablesService, CuentasContablesService>();
 builder.Services.AddScoped<IExternalDataService, ExternalDataService>();
 
 var app = builder.Build();

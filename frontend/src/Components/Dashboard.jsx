@@ -26,10 +26,10 @@ const modules = [
   },
   {
     title: 'Contabilidad',
-    description: 'Asientos, libro diario y reportes contables.',
-    status: 'Próximo',
-    route: null,
-    metric: 'Pendiente de definición',
+    description: 'Plan de cuentas contables.',
+    status: 'Disponible',
+    route: '/contabilidad/cuentas',
+    metric: 'Plan de Cuentas',
   },
 ];
 
@@ -90,4 +90,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-

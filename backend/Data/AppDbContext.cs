@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using BudgetControl.Api.Models;
+using BudgetControl.Api.Models.Accounting;
 using BudgetControl.Api.Models.Commercial;
 
 namespace BudgetControl.Api.Data
@@ -24,6 +25,7 @@ namespace BudgetControl.Api.Data
         public DbSet<VinculacionFacturaComercial> VinculacionesFacturaComerciales { get; set; } = null!;
         public DbSet<AjusteCuotaComercial> AjustesCuotaComerciales { get; set; } = null!;
         public DbSet<AjusteAcuerdoComercialVia> AjustesAcuerdosComercialesVias { get; set; } = null!;
+        public DbSet<CuentaContable> CuentasContables { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -325,6 +327,22 @@ namespace BudgetControl.Api.Data
                     .WithMany()
                     .HasForeignKey(e => e.AcuerdoComercialId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<CuentaContable>(entity =>
+            {
+                entity.ToTable("cuentas_contables");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Nombre).HasColumnName("nombre").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.TipoCuenta).HasColumnName("tipo_cuenta").HasMaxLength(30).IsRequired();
+                entity.Property(e => e.Activa).HasColumnName("activa").HasDefaultValue(true);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_cuentas_contables_codigo")
+                    .IsUnique();
             });
         }
     }
