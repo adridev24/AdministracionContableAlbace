@@ -4,6 +4,7 @@ import Login from './Components/auth/Login';
 import Dashboard from './Components/Dashboard';
 import { comercialRoutes } from './modules/comercial';
 import { contabilidadRoutes } from './modules/contabilidad';
+import { ventasRoutes } from './modules/ventas';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -26,6 +27,13 @@ function App() {
           />
         ))}
         {contabilidadRoutes.map((route) => (
+          <Route
+            key={route.path}
+            path={route.path}
+            element={isAuthenticated ? route.element : <Navigate to="/login" />}
+          />
+        ))}
+        {ventasRoutes.map((route) => (
           <Route
             key={route.path}
             path={route.path}

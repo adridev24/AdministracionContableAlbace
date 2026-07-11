@@ -19,10 +19,10 @@ const modules = [
   },
   {
     title: 'Ventas',
-    description: 'Facturación, cobranzas y cuentas corrientes.',
-    status: 'Próximo',
-    route: null,
-    metric: 'Pendiente de definición',
+    description: 'Modulo inicial para operaciones formales de Via 1.',
+    status: 'Disponible',
+    route: '/ventas',
+    metric: 'Estructura inicial',
   },
   {
     title: 'Contabilidad',
