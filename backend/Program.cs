@@ -83,6 +83,7 @@ builder.Services.AddScoped<IPagoComercialService, PagoComercialService>();
 builder.Services.AddScoped<ICuentasContablesService, CuentasContablesService>();
 builder.Services.AddScoped<IAsientosContablesService, AsientosContablesService>();
 builder.Services.AddScoped<IConfiguracionesContablesService, ConfiguracionesContablesService>();
+builder.Services.AddScoped<IContabilizacionAutomaticaService, ContabilizacionAutomaticaService>();
 builder.Services.AddScoped<IExternalDataService, ExternalDataService>();
 
 var app = builder.Build();
