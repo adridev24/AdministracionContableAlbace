@@ -24,6 +24,10 @@ const ContabilidadHomePage = () => (
           <strong>Asientos Contables</strong>
           <span>Alta manual, consulta de detalle y reversion de asientos.</span>
         </Link>
+        <Link className="module-menu-item" to="/contabilidad/configuracion">
+          <strong>Configuracion Contable</strong>
+          <span>Asociar operaciones del sistema con cuentas contables.</span>
+        </Link>
       </div>
     </SectionCard>
   </div>

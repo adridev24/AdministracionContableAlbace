@@ -3,6 +3,7 @@ import ContabilidadHomePage from '../pages/ContabilidadHomePage';
 import AsientosContablesPage from '../pages/AsientosContablesPage';
 import NuevoAsientoPage from '../pages/NuevoAsientoPage';
 import AsientoDetallePage from '../pages/AsientoDetallePage';
+import ConfiguracionContablePage from '../pages/ConfiguracionContablePage';
 
 const contabilidadRoutes = [
   {
@@ -24,6 +25,10 @@ const contabilidadRoutes = [
   {
     path: '/contabilidad/asientos/:id',
     element: <AsientoDetallePage />,
+  },
+  {
+    path: '/contabilidad/configuracion',
+    element: <ConfiguracionContablePage />,
   },
 ];
 

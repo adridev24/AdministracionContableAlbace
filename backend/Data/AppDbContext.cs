@@ -28,6 +28,8 @@ namespace BudgetControl.Api.Data
         public DbSet<CuentaContable> CuentasContables { get; set; } = null!;
         public DbSet<AsientoContable> AsientosContables { get; set; } = null!;
         public DbSet<AsientoContableDetalle> AsientosContablesDetalle { get; set; } = null!;
+        public DbSet<ConfiguracionContable> ConfiguracionesContables { get; set; } = null!;
+        public DbSet<ConfiguracionContableDetalle> ConfiguracionesContablesDetalle { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -393,6 +395,54 @@ namespace BudgetControl.Api.Data
                     .WithMany(e => e.Detalles)
                     .HasForeignKey(e => e.AsientoContableId)
                     .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.CuentaContable)
+                    .WithMany()
+                    .HasForeignKey(e => e.CuentaContableId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<ConfiguracionContable>(entity =>
+            {
+                entity.ToTable("configuraciones_contables");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.CodigoOperacion).HasColumnName("codigo_operacion").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(500).IsRequired();
+                entity.Property(e => e.Activa).HasColumnName("activa").HasDefaultValue(true);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+
+                entity.HasIndex(e => e.CodigoOperacion)
+                    .HasDatabaseName("ix_configuraciones_contables_codigo_operacion")
+                    .IsUnique();
+            });
+
+            modelBuilder.Entity<ConfiguracionContableDetalle>(entity =>
+            {
+                entity.ToTable("configuraciones_contables_detalle");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.ConfiguracionContableId).HasColumnName("configuracion_contable_id");
+                entity.Property(e => e.TipoMovimiento).HasColumnName("tipo_movimiento").HasMaxLength(10).IsRequired();
+                entity.Property(e => e.Concepto).HasColumnName("concepto").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.CuentaContableId).HasColumnName("cuenta_contable_id");
+                entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
+
+                entity.HasIndex(e => e.ConfiguracionContableId)
+                    .HasDatabaseName("ix_configuraciones_contables_detalle_configuracion_contable_id");
+
+                entity.HasIndex(e => e.CuentaContableId)
+                    .HasDatabaseName("ix_configuraciones_contables_detalle_cuenta_contable_id");
+
+                entity.HasIndex(e => new { e.ConfiguracionContableId, e.Concepto })
+                    .HasDatabaseName("ix_configuraciones_contables_detalle_concepto_activo")
+                    .IsUnique()
+                    .HasFilter("activo = true");
+
+                entity.HasOne(e => e.ConfiguracionContable)
+                    .WithMany(e => e.Detalles)
+                    .HasForeignKey(e => e.ConfiguracionContableId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(e => e.CuentaContable)
                     .WithMany()
