@@ -8,6 +8,8 @@ namespace BudgetControl.Api.DTOs.Sales
         [Required]
         public int TipoComprobanteVentaId { get; set; }
 
+        public int? PuntoVentaComprobanteId { get; set; }
+
         [Required]
         public string ClienteExternoId { get; set; } = null!;
 
@@ -32,6 +34,46 @@ namespace BudgetControl.Api.DTOs.Sales
         public string? Observaciones { get; set; }
     }
 
+    public class TipoComprobanteVentaRequest
+    {
+        [Required]
+        public string Codigo { get; set; } = null!;
+
+        [Required]
+        public string Descripcion { get; set; } = null!;
+
+        public string? Letra { get; set; }
+        public string TipoFiscal { get; set; } = "Local";
+        public bool EsCreditoElectronica { get; set; }
+        public bool EsExportacion { get; set; }
+        public bool RequiereNomenclador { get; set; }
+        public bool PermiteIva { get; set; } = true;
+        public int Signo { get; set; } = 1;
+        public bool Activo { get; set; } = true;
+        public int Orden { get; set; }
+    }
+
+    public class PuntoVentaRequest
+    {
+        [Range(1, int.MaxValue)]
+        public int Numero { get; set; }
+
+        [Required]
+        public string Descripcion { get; set; } = null!;
+
+        public bool Activo { get; set; } = true;
+        public string? Observaciones { get; set; }
+    }
+
+    public class PuntoVentaComprobanteRequest
+    {
+        [Required]
+        public int TipoComprobanteVentaId { get; set; }
+
+        public bool Activo { get; set; } = true;
+        public string? Descripcion { get; set; }
+    }
+
     public class VentaListFilterRequest
     {
         public DateTime? FechaDesde { get; set; }
@@ -39,6 +81,7 @@ namespace BudgetControl.Api.DTOs.Sales
         public string? ClienteExternoId { get; set; }
         public string? ObraExternaId { get; set; }
         public int? TipoComprobanteVentaId { get; set; }
+        public int? PuntoVentaComprobanteId { get; set; }
         public int? PuntoVenta { get; set; }
         public long? NumeroComprobante { get; set; }
         public VentaEstado? Estado { get; set; }

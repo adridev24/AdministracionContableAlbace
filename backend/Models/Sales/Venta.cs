@@ -7,6 +7,7 @@ namespace BudgetControl.Api.Models.Sales
         public int Id { get; set; }
 
         public int TipoComprobanteVentaId { get; set; }
+        public int? PuntoVentaComprobanteId { get; set; }
 
         [Required]
         public string ClienteExternoId { get; set; } = null!;
@@ -33,5 +34,6 @@ namespace BudgetControl.Api.Models.Sales
         public string? UsuarioModificacion { get; set; }
 
         public TipoComprobanteVenta TipoComprobante { get; set; } = null!;
+        public PuntoVentaComprobante? PuntoVentaComprobante { get; set; }
     }
 }

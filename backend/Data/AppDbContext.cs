@@ -33,6 +33,8 @@ namespace BudgetControl.Api.Data
         public DbSet<ConfiguracionContableDetalle> ConfiguracionesContablesDetalle { get; set; } = null!;
         public DbSet<TipoComprobanteVenta> TiposComprobanteVenta { get; set; } = null!;
         public DbSet<Venta> Ventas { get; set; } = null!;
+        public DbSet<PuntoVenta> PuntosVenta { get; set; } = null!;
+        public DbSet<PuntoVentaComprobante> PuntosVentaComprobantes { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -460,21 +462,89 @@ namespace BudgetControl.Api.Data
                 entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
                 entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(200).IsRequired();
                 entity.Property(e => e.Letra).HasColumnName("letra").HasMaxLength(5);
+                entity.Property(e => e.TipoFiscal).HasColumnName("tipo_fiscal").HasMaxLength(50).HasDefaultValue("Local").IsRequired();
+                entity.Property(e => e.EsCreditoElectronica).HasColumnName("es_credito_electronica").HasDefaultValue(false);
+                entity.Property(e => e.EsExportacion).HasColumnName("es_exportacion").HasDefaultValue(false);
+                entity.Property(e => e.RequiereNomenclador).HasColumnName("requiere_nomenclador").HasDefaultValue(false);
+                entity.Property(e => e.PermiteIva).HasColumnName("permite_iva").HasDefaultValue(true);
                 entity.Property(e => e.Signo).HasColumnName("signo").HasDefaultValue(1);
                 entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
                 entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).HasDefaultValue("Sistema").IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
 
                 entity.HasIndex(e => e.Codigo)
                     .HasDatabaseName("ix_tipos_comprobante_venta_codigo")
                     .IsUnique();
 
                 entity.HasData(
-                    new TipoComprobanteVenta { Id = 1, Codigo = "FACTURA_A", Descripcion = "Factura A", Letra = "A", Signo = 1, Activo = true, Orden = 10 },
-                    new TipoComprobanteVenta { Id = 2, Codigo = "FACTURA_B", Descripcion = "Factura B", Letra = "B", Signo = 1, Activo = true, Orden = 20 },
-                    new TipoComprobanteVenta { Id = 3, Codigo = "FACTURA_C", Descripcion = "Factura C", Letra = "C", Signo = 1, Activo = true, Orden = 30 },
-                    new TipoComprobanteVenta { Id = 4, Codigo = "NOTA_DEBITO", Descripcion = "Nota de debito", Letra = null, Signo = 1, Activo = true, Orden = 40 },
-                    new TipoComprobanteVenta { Id = 5, Codigo = "NOTA_CREDITO", Descripcion = "Nota de credito", Letra = null, Signo = -1, Activo = true, Orden = 50 }
+                    BuildTipoComprobanteSeed(1, "FACTURA_A", "Factura A", "A", "Local", false, false, false, true, 1, true, 10),
+                    BuildTipoComprobanteSeed(2, "FACTURA_B", "Factura B", "B", "Local", false, false, false, true, 1, true, 20),
+                    BuildTipoComprobanteSeed(3, "FACTURA_C", "Factura C", "C", "Local", false, false, false, true, 1, true, 30),
+                    BuildTipoComprobanteSeed(4, "NOTA_DEBITO", "Nota de debito", null, "Local", false, false, false, true, 1, true, 40),
+                    BuildTipoComprobanteSeed(5, "NOTA_CREDITO", "Nota de credito", null, "Local", false, false, false, true, -1, true, 50),
+                    BuildTipoComprobanteSeed(6, "FACTURA_E", "Factura E", "E", "Exportacion", false, true, false, false, 1, true, 60),
+                    BuildTipoComprobanteSeed(7, "FCE_MIPYME_A_CON_NOMENCLADOR", "Factura de Credito Electronica MiPyME A con nomenclador", "A", "Local", true, false, true, true, 1, true, 70),
+                    BuildTipoComprobanteSeed(8, "FCE_MIPYME_A_SIN_NOMENCLADOR", "Factura de Credito Electronica MiPyME A sin nomenclador", "A", "Local", true, false, false, true, 1, true, 80),
+                    BuildTipoComprobanteSeed(9, "NOTA_DEBITO_A", "Nota de debito A", "A", "Local", false, false, false, true, 1, true, 90),
+                    BuildTipoComprobanteSeed(10, "NOTA_CREDITO_A", "Nota de credito A", "A", "Local", false, false, false, true, -1, true, 100),
+                    BuildTipoComprobanteSeed(11, "NOTA_DEBITO_B", "Nota de debito B", "B", "Local", false, false, false, true, 1, true, 110),
+                    BuildTipoComprobanteSeed(12, "NOTA_CREDITO_B", "Nota de credito B", "B", "Local", false, false, false, true, -1, true, 120),
+                    BuildTipoComprobanteSeed(13, "NOTA_DEBITO_E", "Nota de debito E", "E", "Exportacion", false, true, false, false, 1, true, 130),
+                    BuildTipoComprobanteSeed(14, "NOTA_CREDITO_E", "Nota de credito E", "E", "Exportacion", false, true, false, false, -1, true, 140),
+                    BuildTipoComprobanteSeed(15, "FCE_MIPYME_NOTA_DEBITO_A_CON_NOMENCLADOR", "Nota de debito FCE MiPyME A con nomenclador", "A", "Local", true, false, true, true, 1, true, 150),
+                    BuildTipoComprobanteSeed(16, "FCE_MIPYME_NOTA_CREDITO_A_CON_NOMENCLADOR", "Nota de credito FCE MiPyME A con nomenclador", "A", "Local", true, false, true, true, -1, true, 160),
+                    BuildTipoComprobanteSeed(17, "FCE_MIPYME_NOTA_DEBITO_A_SIN_NOMENCLADOR", "Nota de debito FCE MiPyME A sin nomenclador", "A", "Local", true, false, false, true, 1, true, 170),
+                    BuildTipoComprobanteSeed(18, "FCE_MIPYME_NOTA_CREDITO_A_SIN_NOMENCLADOR", "Nota de credito FCE MiPyME A sin nomenclador", "A", "Local", true, false, false, true, -1, true, 180)
                 );
+            });
+
+            modelBuilder.Entity<PuntoVenta>(entity =>
+            {
+                entity.ToTable("puntos_venta");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Numero).HasColumnName("numero");
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.Numero)
+                    .HasDatabaseName("ix_puntos_venta_numero")
+                    .IsUnique();
+            });
+
+            modelBuilder.Entity<PuntoVentaComprobante>(entity =>
+            {
+                entity.ToTable("puntos_venta_comprobantes");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.PuntoVentaId).HasColumnName("punto_venta_id");
+                entity.Property(e => e.TipoComprobanteVentaId).HasColumnName("tipo_comprobante_venta_id");
+                entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(500);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => new { e.PuntoVentaId, e.TipoComprobanteVentaId })
+                    .HasDatabaseName("ix_puntos_venta_comprobantes_punto_tipo")
+                    .IsUnique();
+
+                entity.HasOne(e => e.PuntoVenta)
+                    .WithMany(p => p.Comprobantes)
+                    .HasForeignKey(e => e.PuntoVentaId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.TipoComprobante)
+                    .WithMany(t => t.PuntosVentaComprobantes)
+                    .HasForeignKey(e => e.TipoComprobanteVentaId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<Venta>(entity =>
@@ -482,6 +552,7 @@ namespace BudgetControl.Api.Data
                 entity.ToTable("ventas");
                 entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
                 entity.Property(e => e.TipoComprobanteVentaId).HasColumnName("tipo_comprobante_venta_id");
+                entity.Property(e => e.PuntoVentaComprobanteId).HasColumnName("punto_venta_comprobante_id");
                 entity.Property(e => e.ClienteExternoId).HasColumnName("cliente_externo_id").HasMaxLength(50).IsRequired();
                 entity.Property(e => e.ObraExternaId).HasColumnName("obra_externa_id").HasMaxLength(50).IsRequired();
                 entity.Property(e => e.FechaComprobante).HasColumnName("fecha_comprobante");
@@ -512,11 +583,52 @@ namespace BudgetControl.Api.Data
                     .HasDatabaseName("ix_ventas_numeracion")
                     .IsUnique();
 
+                entity.HasIndex(e => e.PuntoVentaComprobanteId)
+                    .HasDatabaseName("ix_ventas_punto_venta_comprobante_id");
+
                 entity.HasOne(e => e.TipoComprobante)
                     .WithMany(t => t.Ventas)
                     .HasForeignKey(e => e.TipoComprobanteVentaId)
                     .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.PuntoVentaComprobante)
+                    .WithMany(r => r.Ventas)
+                    .HasForeignKey(e => e.PuntoVentaComprobanteId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
+        }
+
+        private static TipoComprobanteVenta BuildTipoComprobanteSeed(
+            int id,
+            string codigo,
+            string descripcion,
+            string? letra,
+            string tipoFiscal,
+            bool esCreditoElectronica,
+            bool esExportacion,
+            bool requiereNomenclador,
+            bool permiteIva,
+            int signo,
+            bool activo,
+            int orden)
+        {
+            return new TipoComprobanteVenta
+            {
+                Id = id,
+                Codigo = codigo,
+                Descripcion = descripcion,
+                Letra = letra,
+                TipoFiscal = tipoFiscal,
+                EsCreditoElectronica = esCreditoElectronica,
+                EsExportacion = esExportacion,
+                RequiereNomenclador = requiereNomenclador,
+                PermiteIva = permiteIva,
+                Signo = signo,
+                Activo = activo,
+                Orden = orden,
+                FechaAlta = new DateTime(2026, 7, 11, 0, 0, 0, DateTimeKind.Utc),
+                UsuarioAlta = "Sistema"
+            };
         }
     }
 }

@@ -8,18 +8,62 @@ namespace BudgetControl.Api.DTOs.Sales
         public string Codigo { get; set; } = null!;
         public string Descripcion { get; set; } = null!;
         public string? Letra { get; set; }
+        public string TipoFiscal { get; set; } = null!;
+        public bool EsCreditoElectronica { get; set; }
+        public bool EsExportacion { get; set; }
+        public bool RequiereNomenclador { get; set; }
+        public bool PermiteIva { get; set; }
         public int Signo { get; set; }
         public bool Activo { get; set; }
         public int Orden { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class PuntoVentaResponse
+    {
+        public int Id { get; set; }
+        public int Numero { get; set; }
+        public string Descripcion { get; set; } = null!;
+        public bool Activo { get; set; }
+        public string? Observaciones { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class PuntoVentaComprobanteResponse
+    {
+        public int Id { get; set; }
+        public int PuntoVentaId { get; set; }
+        public int PuntoVentaNumero { get; set; }
+        public string PuntoVentaDescripcion { get; set; } = null!;
+        public int TipoComprobanteVentaId { get; set; }
+        public string TipoComprobanteCodigo { get; set; } = null!;
+        public string TipoComprobanteDescripcion { get; set; } = null!;
+        public bool Activo { get; set; }
+        public string? Descripcion { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
     }
 
     public class VentaResponse
     {
         public int Id { get; set; }
         public int TipoComprobanteVentaId { get; set; }
+        public int? PuntoVentaComprobanteId { get; set; }
         public string TipoComprobanteCodigo { get; set; } = null!;
         public string TipoComprobanteDescripcion { get; set; } = null!;
         public string? TipoComprobanteLetra { get; set; }
+        public bool TipoComprobanteEsCreditoElectronica { get; set; }
+        public bool TipoComprobanteEsExportacion { get; set; }
+        public bool TipoComprobanteRequiereNomenclador { get; set; }
+        public bool TipoComprobantePermiteIva { get; set; }
         public string ClienteExternoId { get; set; } = null!;
         public string? ClienteNombre { get; set; }
         public string ObraExternaId { get; set; } = null!;
