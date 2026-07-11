@@ -55,3 +55,86 @@
 .cuenta-form .modal-header h2 {
   margin: 0;
 }
+
+.module-menu-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.module-menu-item {
+  background: #f8fafc;
+  border: 1px solid #e6edf5;
+  border-radius: 8px;
+  color: var(--text-primary);
+  display: grid;
+  gap: 8px;
+  min-height: 118px;
+  padding: 18px;
+  text-decoration: none;
+}
+
+.module-menu-item:hover {
+  border-color: var(--brand);
+}
+
+.module-menu-item span,
+.detail-grid span,
+.asiento-totals span {
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.asiento-edit-table input,
+.asiento-edit-table select {
+  min-width: 150px;
+  width: 100%;
+}
+
+.asiento-totals {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 18px 0;
+}
+
+.asiento-totals div,
+.detail-grid div {
+  background: #f8fafc;
+  border: 1px solid #e6edf5;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.asiento-totals strong,
+.detail-grid strong {
+  color: #111827;
+}
+
+.asiento-totals .is-balanced {
+  border-color: #bbf7d0;
+}
+
+.asiento-totals .is-unbalanced {
+  border-color: #fecaca;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.data-table tfoot td {
+  background: #f8fafc;
+  border-top: 1px solid #e6edf5;
+}
+
+@media (max-width: 780px) {
+  .asiento-totals {
+    grid-template-columns: 1fr;
+  }
+}

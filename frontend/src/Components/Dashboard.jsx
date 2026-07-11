@@ -26,10 +26,10 @@ const modules = [
   },
   {
     title: 'Contabilidad',
-    description: 'Plan de cuentas contables.',
+    description: 'Plan de cuentas y asientos contables.',
     status: 'Disponible',
-    route: '/contabilidad/cuentas',
-    metric: 'Plan de Cuentas',
+    route: '/contabilidad',
+    metric: 'Plan de Cuentas / Asientos',
   },
 ];
 

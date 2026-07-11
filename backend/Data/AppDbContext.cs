@@ -26,6 +26,8 @@ namespace BudgetControl.Api.Data
         public DbSet<AjusteCuotaComercial> AjustesCuotaComerciales { get; set; } = null!;
         public DbSet<AjusteAcuerdoComercialVia> AjustesAcuerdosComercialesVias { get; set; } = null!;
         public DbSet<CuentaContable> CuentasContables { get; set; } = null!;
+        public DbSet<AsientoContable> AsientosContables { get; set; } = null!;
+        public DbSet<AsientoContableDetalle> AsientosContablesDetalle { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -343,6 +345,59 @@ namespace BudgetControl.Api.Data
                 entity.HasIndex(e => e.Codigo)
                     .HasDatabaseName("ix_cuentas_contables_codigo")
                     .IsUnique();
+            });
+
+            modelBuilder.Entity<AsientoContable>(entity =>
+            {
+                entity.ToTable("asientos_contables");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Fecha).HasColumnName("fecha");
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(500).IsRequired();
+                entity.Property(e => e.ModuloOrigen).HasColumnName("modulo_origen").HasMaxLength(100);
+                entity.Property(e => e.IdOrigen).HasColumnName("id_origen").HasMaxLength(100);
+                entity.Property(e => e.EsAutomatico).HasColumnName("es_automatico").HasDefaultValue(false);
+                entity.Property(e => e.EsReversion).HasColumnName("es_reversion").HasDefaultValue(false);
+                entity.Property(e => e.IdAsientoRevertido).HasColumnName("id_asiento_revertido");
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+
+                entity.HasIndex(e => e.IdAsientoRevertido)
+                    .HasDatabaseName("ix_asientos_contables_id_asiento_revertido");
+
+                entity.HasIndex(e => new { e.ModuloOrigen, e.IdOrigen })
+                    .HasDatabaseName("ix_asientos_contables_modulo_origen_id_origen");
+
+                entity.HasOne(e => e.AsientoRevertido)
+                    .WithMany(e => e.Reversiones)
+                    .HasForeignKey(e => e.IdAsientoRevertido)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<AsientoContableDetalle>(entity =>
+            {
+                entity.ToTable("asientos_contables_detalle");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.AsientoContableId).HasColumnName("asiento_contable_id");
+                entity.Property(e => e.CuentaContableId).HasColumnName("cuenta_contable_id");
+                entity.Property(e => e.Debe).HasColumnName("debe").HasPrecision(18, 2);
+                entity.Property(e => e.Haber).HasColumnName("haber").HasPrecision(18, 2);
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(500).IsRequired();
+
+                entity.HasIndex(e => e.AsientoContableId)
+                    .HasDatabaseName("ix_asientos_contables_detalle_asiento_contable_id");
+
+                entity.HasIndex(e => e.CuentaContableId)
+                    .HasDatabaseName("ix_asientos_contables_detalle_cuenta_contable_id");
+
+                entity.HasOne(e => e.AsientoContable)
+                    .WithMany(e => e.Detalles)
+                    .HasForeignKey(e => e.AsientoContableId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.CuentaContable)
+                    .WithMany()
+                    .HasForeignKey(e => e.CuentaContableId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }
