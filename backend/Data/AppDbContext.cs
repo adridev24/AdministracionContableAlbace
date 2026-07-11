@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using BudgetControl.Api.Models;
 using BudgetControl.Api.Models.Accounting;
 using BudgetControl.Api.Models.Commercial;
+using BudgetControl.Api.Models.Sales;
 
 namespace BudgetControl.Api.Data
 {
@@ -30,6 +31,8 @@ namespace BudgetControl.Api.Data
         public DbSet<AsientoContableDetalle> AsientosContablesDetalle { get; set; } = null!;
         public DbSet<ConfiguracionContable> ConfiguracionesContables { get; set; } = null!;
         public DbSet<ConfiguracionContableDetalle> ConfiguracionesContablesDetalle { get; set; } = null!;
+        public DbSet<TipoComprobanteVenta> TiposComprobanteVenta { get; set; } = null!;
+        public DbSet<Venta> Ventas { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -447,6 +450,71 @@ namespace BudgetControl.Api.Data
                 entity.HasOne(e => e.CuentaContable)
                     .WithMany()
                     .HasForeignKey(e => e.CuentaContableId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<TipoComprobanteVenta>(entity =>
+            {
+                entity.ToTable("tipos_comprobante_venta");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Letra).HasColumnName("letra").HasMaxLength(5);
+                entity.Property(e => e.Signo).HasColumnName("signo").HasDefaultValue(1);
+                entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
+                entity.Property(e => e.Orden).HasColumnName("orden");
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_tipos_comprobante_venta_codigo")
+                    .IsUnique();
+
+                entity.HasData(
+                    new TipoComprobanteVenta { Id = 1, Codigo = "FACTURA_A", Descripcion = "Factura A", Letra = "A", Signo = 1, Activo = true, Orden = 10 },
+                    new TipoComprobanteVenta { Id = 2, Codigo = "FACTURA_B", Descripcion = "Factura B", Letra = "B", Signo = 1, Activo = true, Orden = 20 },
+                    new TipoComprobanteVenta { Id = 3, Codigo = "FACTURA_C", Descripcion = "Factura C", Letra = "C", Signo = 1, Activo = true, Orden = 30 },
+                    new TipoComprobanteVenta { Id = 4, Codigo = "NOTA_DEBITO", Descripcion = "Nota de debito", Letra = null, Signo = 1, Activo = true, Orden = 40 },
+                    new TipoComprobanteVenta { Id = 5, Codigo = "NOTA_CREDITO", Descripcion = "Nota de credito", Letra = null, Signo = -1, Activo = true, Orden = 50 }
+                );
+            });
+
+            modelBuilder.Entity<Venta>(entity =>
+            {
+                entity.ToTable("ventas");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.TipoComprobanteVentaId).HasColumnName("tipo_comprobante_venta_id");
+                entity.Property(e => e.ClienteExternoId).HasColumnName("cliente_externo_id").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.ObraExternaId).HasColumnName("obra_externa_id").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.FechaComprobante).HasColumnName("fecha_comprobante");
+                entity.Property(e => e.PuntoVenta).HasColumnName("punto_venta");
+                entity.Property(e => e.NumeroComprobante).HasColumnName("numero_comprobante");
+                entity.Property(e => e.MonedaCodigo).HasColumnName("moneda_codigo").HasMaxLength(10).IsRequired();
+                entity.Property(e => e.Cotizacion).HasColumnName("cotizacion").HasPrecision(18, 6);
+                entity.Property(e => e.Estado).HasColumnName("estado").HasDefaultValue(VentaEstado.Borrador);
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.FechaComprobante)
+                    .HasDatabaseName("ix_ventas_fecha_comprobante");
+
+                entity.HasIndex(e => e.ClienteExternoId)
+                    .HasDatabaseName("ix_ventas_cliente_externo_id");
+
+                entity.HasIndex(e => e.ObraExternaId)
+                    .HasDatabaseName("ix_ventas_obra_externa_id");
+
+                entity.HasIndex(e => e.Estado)
+                    .HasDatabaseName("ix_ventas_estado");
+
+                entity.HasIndex(e => new { e.TipoComprobanteVentaId, e.PuntoVenta, e.NumeroComprobante })
+                    .HasDatabaseName("ix_ventas_numeracion")
+                    .IsUnique();
+
+                entity.HasOne(e => e.TipoComprobante)
+                    .WithMany(t => t.Ventas)
+                    .HasForeignKey(e => e.TipoComprobanteVentaId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
         }
