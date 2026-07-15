@@ -6,4 +6,19 @@ namespace BudgetControl.Api.Models.Sales
         Confirmada,
         Anulada
     }
+
+    public enum TipoTratamientoIvaVenta
+    {
+        Gravado,
+        Exento,
+        NoGravado
+    }
+
+    public enum TipoBaseCalculoPercepcionIibb
+    {
+        NetoGravado,
+        NetoTotal,
+        TotalSinIva,
+        OtraBaseConfigurable
+    }
 }

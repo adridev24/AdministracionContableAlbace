@@ -15,6 +15,18 @@ namespace BudgetControl.Api.Services.Sales
         Task<IEnumerable<PuntoVentaComprobanteResponse>> GetComprobantesPorPuntoVentaAsync(int puntoVentaId, bool soloActivos = false);
         Task<PuntoVentaComprobanteResponse> CreatePuntoVentaComprobanteAsync(int puntoVentaId, PuntoVentaComprobanteRequest request);
         Task<PuntoVentaComprobanteResponse> UpdatePuntoVentaComprobanteAsync(int puntoVentaId, int relacionId, PuntoVentaComprobanteRequest request);
+        Task<IEnumerable<AlicuotaIvaVentaResponse>> GetAlicuotasIvaAsync(bool soloActivos = false, string? search = null);
+        Task<AlicuotaIvaVentaResponse?> GetAlicuotaIvaAsync(int id);
+        Task<AlicuotaIvaVentaResponse> CreateAlicuotaIvaAsync(AlicuotaIvaVentaRequest request);
+        Task<AlicuotaIvaVentaResponse> UpdateAlicuotaIvaAsync(int id, AlicuotaIvaVentaRequest request);
+        Task<IEnumerable<NomencladorFceResponse>> GetNomencladoresFceAsync(bool soloActivos = false, string? search = null);
+        Task<NomencladorFceResponse?> GetNomencladorFceAsync(int id);
+        Task<NomencladorFceResponse> CreateNomencladorFceAsync(NomencladorFceRequest request);
+        Task<NomencladorFceResponse> UpdateNomencladorFceAsync(int id, NomencladorFceRequest request);
+        Task<IEnumerable<PercepcionIibbEntreRiosResponse>> GetPercepcionesIibbAsync(bool soloActivos = false, string? search = null, bool? soloVigentes = null);
+        Task<PercepcionIibbEntreRiosResponse?> GetPercepcionIibbAsync(int id);
+        Task<PercepcionIibbEntreRiosResponse> CreatePercepcionIibbAsync(PercepcionIibbEntreRiosRequest request);
+        Task<PercepcionIibbEntreRiosResponse> UpdatePercepcionIibbAsync(int id, PercepcionIibbEntreRiosRequest request);
         Task<VentaListResponse> GetVentasAsync(VentaListFilterRequest filters);
         Task<VentaResponse?> GetVentaAsync(int id);
         Task<VentaResponse> CreateVentaAsync(VentaHeaderRequest request);

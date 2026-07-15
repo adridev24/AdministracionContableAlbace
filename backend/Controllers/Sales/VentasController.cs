@@ -154,6 +154,126 @@ namespace BudgetControl.Api.Controllers.Sales
             }
         }
 
+        [HttpGet("alicuotas-iva")]
+        public async Task<IActionResult> GetAlicuotasIva([FromQuery] bool soloActivos = false, [FromQuery] string? search = null)
+        {
+            return Ok(await _service.GetAlicuotasIvaAsync(soloActivos, search));
+        }
+
+        [HttpGet("alicuotas-iva/{id}")]
+        public async Task<IActionResult> GetAlicuotaIva(int id)
+        {
+            var item = await _service.GetAlicuotaIvaAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+
+        [HttpPost("alicuotas-iva")]
+        public async Task<IActionResult> CreateAlicuotaIva([FromBody] AlicuotaIvaVentaRequest request)
+        {
+            try
+            {
+                var item = await _service.CreateAlicuotaIvaAsync(request);
+                return CreatedAtAction(nameof(GetAlicuotaIva), new { id = item.Id }, item);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("alicuotas-iva/{id}")]
+        public async Task<IActionResult> UpdateAlicuotaIva(int id, [FromBody] AlicuotaIvaVentaRequest request)
+        {
+            try
+            {
+                return Ok(await _service.UpdateAlicuotaIvaAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("nomencladores")]
+        public async Task<IActionResult> GetNomencladores([FromQuery] bool soloActivos = false, [FromQuery] string? search = null)
+        {
+            return Ok(await _service.GetNomencladoresFceAsync(soloActivos, search));
+        }
+
+        [HttpGet("nomencladores/{id}")]
+        public async Task<IActionResult> GetNomenclador(int id)
+        {
+            var item = await _service.GetNomencladorFceAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+
+        [HttpPost("nomencladores")]
+        public async Task<IActionResult> CreateNomenclador([FromBody] NomencladorFceRequest request)
+        {
+            try
+            {
+                var item = await _service.CreateNomencladorFceAsync(request);
+                return CreatedAtAction(nameof(GetNomenclador), new { id = item.Id }, item);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("nomencladores/{id}")]
+        public async Task<IActionResult> UpdateNomenclador(int id, [FromBody] NomencladorFceRequest request)
+        {
+            try
+            {
+                return Ok(await _service.UpdateNomencladorFceAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("percepciones-iibb")]
+        public async Task<IActionResult> GetPercepcionesIibb([FromQuery] bool soloActivos = false, [FromQuery] string? search = null, [FromQuery] bool? soloVigentes = null)
+        {
+            return Ok(await _service.GetPercepcionesIibbAsync(soloActivos, search, soloVigentes));
+        }
+
+        [HttpGet("percepciones-iibb/{id}")]
+        public async Task<IActionResult> GetPercepcionIibb(int id)
+        {
+            var item = await _service.GetPercepcionIibbAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+
+        [HttpPost("percepciones-iibb")]
+        public async Task<IActionResult> CreatePercepcionIibb([FromBody] PercepcionIibbEntreRiosRequest request)
+        {
+            try
+            {
+                var item = await _service.CreatePercepcionIibbAsync(request);
+                return CreatedAtAction(nameof(GetPercepcionIibb), new { id = item.Id }, item);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("percepciones-iibb/{id}")]
+        public async Task<IActionResult> UpdatePercepcionIibb(int id, [FromBody] PercepcionIibbEntreRiosRequest request)
+        {
+            try
+            {
+                return Ok(await _service.UpdatePercepcionIibbAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetVentas([FromQuery] VentaListFilterRequest filters)
         {

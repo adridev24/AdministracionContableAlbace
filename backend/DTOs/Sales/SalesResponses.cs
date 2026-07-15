@@ -29,6 +29,7 @@ namespace BudgetControl.Api.DTOs.Sales
         public string Descripcion { get; set; } = null!;
         public bool Activo { get; set; }
         public string? Observaciones { get; set; }
+        public List<PuntoVentaComprobanteResponse> ComprobantesPermitidos { get; set; } = new();
         public DateTime FechaAlta { get; set; }
         public string UsuarioAlta { get; set; } = null!;
         public DateTime? FechaModificacion { get; set; }
@@ -87,5 +88,56 @@ namespace BudgetControl.Api.DTOs.Sales
         public int Page { get; set; }
         public int PageSize { get; set; }
         public List<VentaResponse> Items { get; set; } = new();
+    }
+
+    public class AlicuotaIvaVentaResponse
+    {
+        public int Id { get; set; }
+        public string Codigo { get; set; } = null!;
+        public string Descripcion { get; set; } = null!;
+        public TipoTratamientoIvaVenta TipoTratamiento { get; set; }
+        public decimal Porcentaje { get; set; }
+        public bool Activo { get; set; }
+        public int Orden { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class NomencladorFceResponse
+    {
+        public int Id { get; set; }
+        public string Codigo { get; set; } = null!;
+        public string Descripcion { get; set; } = null!;
+        public bool Activo { get; set; }
+        public int Orden { get; set; }
+        public string? Observaciones { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class PercepcionIibbEntreRiosResponse
+    {
+        public int Id { get; set; }
+        public string Codigo { get; set; } = null!;
+        public string Descripcion { get; set; } = null!;
+        public string Jurisdiccion { get; set; } = null!;
+        public string TipoTributo { get; set; } = null!;
+        public string NumeroRegimen { get; set; } = null!;
+        public decimal Porcentaje { get; set; }
+        public TipoBaseCalculoPercepcionIibb TipoBaseCalculo { get; set; }
+        public decimal? MontoMinimo { get; set; }
+        public DateTime VigenciaDesde { get; set; }
+        public DateTime? VigenciaHasta { get; set; }
+        public bool Activo { get; set; }
+        public int Orden { get; set; }
+        public string? Observaciones { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
     }
 }

@@ -120,9 +120,23 @@ const VentasHomePage = () => {
           <p className="page-subtitle">Encabezados de comprobantes en estado Borrador.</p>
         </div>
         <div className="page-actions">
+          <Link className="btn-secondary" to="/ventas/parametrizacion">Parametrizacion</Link>
           <Link className="btn-secondary" to="/">Principal</Link>
         </div>
       </div>
+
+      <SectionCard title="Menu de Ventas">
+        <div className="module-menu-grid">
+          <Link className="module-menu-item" to="/ventas">
+            <strong>Operaciones</strong>
+            <span>Alta y consulta de encabezados de facturas en borrador.</span>
+          </Link>
+          <Link className="module-menu-item" to="/ventas/parametrizacion">
+            <strong>Parametrizacion</strong>
+            <span>Comprobantes, puntos de venta y parametros tributarios.</span>
+          </Link>
+        </div>
+      </SectionCard>
 
       <SectionCard
         title={selectedVenta ? 'Editar borrador' : 'Nueva venta en borrador'}

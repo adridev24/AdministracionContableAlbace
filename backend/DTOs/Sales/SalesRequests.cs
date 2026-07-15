@@ -63,6 +63,7 @@ namespace BudgetControl.Api.DTOs.Sales
 
         public bool Activo { get; set; } = true;
         public string? Observaciones { get; set; }
+        public List<int>? ComprobantesPermitidosIds { get; set; }
     }
 
     public class PuntoVentaComprobanteRequest
@@ -87,5 +88,68 @@ namespace BudgetControl.Api.DTOs.Sales
         public VentaEstado? Estado { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 50;
+    }
+
+    public class AlicuotaIvaVentaRequest
+    {
+        [Required]
+        public string Codigo { get; set; } = null!;
+
+        [Required]
+        public string Descripcion { get; set; } = null!;
+
+        [Required]
+        public TipoTratamientoIvaVenta TipoTratamiento { get; set; }
+
+        [Range(0, double.MaxValue)]
+        public decimal Porcentaje { get; set; }
+
+        public bool Activo { get; set; } = true;
+        public int Orden { get; set; }
+    }
+
+    public class NomencladorFceRequest
+    {
+        [Required]
+        public string Codigo { get; set; } = null!;
+
+        [Required]
+        public string Descripcion { get; set; } = null!;
+
+        public bool Activo { get; set; } = true;
+        public int Orden { get; set; }
+        public string? Observaciones { get; set; }
+    }
+
+    public class PercepcionIibbEntreRiosRequest
+    {
+        [Required]
+        public string Codigo { get; set; } = null!;
+
+        [Required]
+        public string Descripcion { get; set; } = null!;
+
+        public string Jurisdiccion { get; set; } = "Entre Rios";
+        public string TipoTributo { get; set; } = "PERCEPCION_IIBB";
+
+        [Required]
+        public string NumeroRegimen { get; set; } = null!;
+
+        [Range(0, double.MaxValue)]
+        public decimal Porcentaje { get; set; }
+
+        [Required]
+        public TipoBaseCalculoPercepcionIibb TipoBaseCalculo { get; set; }
+
+        [Range(0, double.MaxValue)]
+        public decimal? MontoMinimo { get; set; }
+
+        [Required]
+        public DateTime VigenciaDesde { get; set; }
+
+        public DateTime? VigenciaHasta { get; set; }
+        public bool Activo { get; set; } = true;
+        public int Orden { get; set; }
+        public string? Observaciones { get; set; }
     }
 }

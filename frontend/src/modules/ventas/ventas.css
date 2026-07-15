@@ -14,6 +14,61 @@
   margin-bottom: 18px;
 }
 
+.ventas-check-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+.ventas-check-grid label {
+  align-items: center;
+  color: var(--text-primary);
+  display: inline-flex;
+  font-weight: 700;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.ventas-check-grid input {
+  height: 16px;
+  width: 16px;
+}
+
+.form-actions,
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  color: #3730a3;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+
+.status-pill.is-active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-pill.is-inactive {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
 .venta-state-line {
   align-items: center;
   background: #f8fafc;
@@ -39,6 +94,11 @@
   color: #92400e;
 }
 
+.status-pill.is-pending {
+  background: #f8fafc;
+  color: #64748b;
+}
+
 .table-subtext {
   color: var(--text-secondary);
   display: block;
@@ -47,8 +107,95 @@
   margin-top: 4px;
 }
 
+.param-summary {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e6edf5;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.param-summary p {
+  color: var(--text-secondary);
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.field-help {
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.param-subsection {
+  border-top: 1px solid #e6edf5;
+  display: grid;
+  gap: 10px;
+  padding-top: 16px;
+}
+
+.param-subsection h3 {
+  color: var(--text-primary);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.param-subsection p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.permission-list {
+  display: grid;
+  gap: 10px;
+}
+
+.permission-item {
+  align-items: center;
+  border: 1px solid #e6edf5;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.permission-item input {
+  height: 16px;
+  width: 16px;
+}
+
+.permission-item span {
+  display: grid;
+  gap: 4px;
+}
+
+.permission-item small {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.permission-item em {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
 @media (max-width: 780px) {
   .ventas-page .section-card-actions {
     justify-content: flex-start;
+  }
+
+  .permission-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .permission-item em {
+    grid-column: 2;
   }
 }

@@ -35,6 +35,9 @@ namespace BudgetControl.Api.Data
         public DbSet<Venta> Ventas { get; set; } = null!;
         public DbSet<PuntoVenta> PuntosVenta { get; set; } = null!;
         public DbSet<PuntoVentaComprobante> PuntosVentaComprobantes { get; set; } = null!;
+        public DbSet<AlicuotaIvaVenta> AlicuotasIvaVenta { get; set; } = null!;
+        public DbSet<NomencladorFce> NomencladoresFce { get; set; } = null!;
+        public DbSet<PercepcionIibbEntreRios> PercepcionesIibbEntreRios { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -595,6 +598,84 @@ namespace BudgetControl.Api.Data
                     .WithMany(r => r.Ventas)
                     .HasForeignKey(e => e.PuntoVentaComprobanteId)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<AlicuotaIvaVenta>(entity =>
+            {
+                entity.ToTable("ventas_alicuotas_iva");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.TipoTratamiento).HasColumnName("tipo_tratamiento").IsRequired();
+                entity.Property(e => e.Porcentaje).HasColumnName("porcentaje").HasPrecision(9, 4);
+                entity.Property(e => e.Activo).HasColumnName("activo");
+                entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_ventas_alicuotas_iva_codigo")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.Activo)
+                    .HasDatabaseName("ix_ventas_alicuotas_iva_activo");
+            });
+
+            modelBuilder.Entity<NomencladorFce>(entity =>
+            {
+                entity.ToTable("ventas_nomencladores_fce");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(250).IsRequired();
+                entity.Property(e => e.Activo).HasColumnName("activo");
+                entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_ventas_nomencladores_fce_codigo")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.Activo)
+                    .HasDatabaseName("ix_ventas_nomencladores_fce_activo");
+            });
+
+            modelBuilder.Entity<PercepcionIibbEntreRios>(entity =>
+            {
+                entity.ToTable("ventas_percepciones_iibb");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(250).IsRequired();
+                entity.Property(e => e.Jurisdiccion).HasColumnName("jurisdiccion").HasMaxLength(100).HasDefaultValue("Entre Rios").IsRequired();
+                entity.Property(e => e.TipoTributo).HasColumnName("tipo_tributo").HasMaxLength(50).HasDefaultValue("PERCEPCION_IIBB").IsRequired();
+                entity.Property(e => e.NumeroRegimen).HasColumnName("numero_regimen").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Porcentaje).HasColumnName("porcentaje").HasPrecision(9, 4);
+                entity.Property(e => e.TipoBaseCalculo).HasColumnName("tipo_base_calculo").IsRequired();
+                entity.Property(e => e.MontoMinimo).HasColumnName("monto_minimo").HasPrecision(18, 2);
+                entity.Property(e => e.VigenciaDesde).HasColumnName("vigencia_desde");
+                entity.Property(e => e.VigenciaHasta).HasColumnName("vigencia_hasta");
+                entity.Property(e => e.Activo).HasColumnName("activo");
+                entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_ventas_percepciones_iibb_codigo")
+                    .IsUnique();
+
+                entity.HasIndex(e => new { e.Jurisdiccion, e.TipoTributo, e.NumeroRegimen, e.TipoBaseCalculo, e.Activo })
+                    .HasDatabaseName("ix_ventas_percepciones_iibb_equivalencia");
+
+                entity.HasIndex(e => new { e.VigenciaDesde, e.VigenciaHasta })
+                    .HasDatabaseName("ix_ventas_percepciones_iibb_vigencia");
             });
         }
 
