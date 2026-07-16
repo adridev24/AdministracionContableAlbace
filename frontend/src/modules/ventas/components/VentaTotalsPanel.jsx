@@ -8,13 +8,15 @@ const VentaTotalsPanel = ({ venta }) => {
     ['Exento', venta?.totalExento],
     ['No gravado', venta?.totalNoGravado],
     ['IVA', venta?.totalIva],
-    ['Total', venta?.total],
+    ['Subtotal antes de percepciones', venta?.totalAntesPercepciones],
+    ['Percepciones', venta?.totalPercepciones],
+    ['Total final', venta?.total],
   ];
 
   return (
     <div className="totals-panel">
       {rows.map(([label, value]) => (
-        <div className={label === 'Total' ? 'is-total' : ''} key={label}>
+        <div className={label === 'Total final' ? 'is-total' : ''} key={label}>
           <span>{label}</span>
           <strong>{formatMoney(value)}</strong>
         </div>

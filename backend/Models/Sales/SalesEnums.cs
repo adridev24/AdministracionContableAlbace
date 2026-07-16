@@ -21,4 +21,25 @@ namespace BudgetControl.Api.Models.Sales
         TotalSinIva,
         OtraBaseConfigurable
     }
+
+    public enum SituacionPercepcionIibbCliente
+    {
+        Pendiente,
+        NoAlcanzado,
+        Alcanzado,
+        Excluido
+    }
+
+    public enum ResultadoPercepcionIibb
+    {
+        Aplicada,
+        NoCorresponde,
+        Excluido,
+        SinRegimen,
+        RegimenVencido,
+        ClienteSinConfigurar,
+        BaseInferiorMinimo,
+        Exportacion,
+        BaseNoSoportada
+    }
 }

@@ -87,6 +87,7 @@ builder.Services.AddScoped<IConfiguracionesContablesService, ConfiguracionesCont
 builder.Services.AddScoped<IContabilizacionAutomaticaService, ContabilizacionAutomaticaService>();
 builder.Services.AddScoped<IExternalDataService, ExternalDataService>();
 builder.Services.AddScoped<ICalculadorVentasService, CalculadorVentasService>();
+builder.Services.AddScoped<IPercepcionIibbService, PercepcionIibbService>();
 builder.Services.AddScoped<IVentasService, VentasService>();
 
 var app = builder.Build();

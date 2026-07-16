@@ -50,6 +50,24 @@ const ventasService = {
   getPercepcionIibb: (id) => apiClient.get(`/api/ventas/percepciones-iibb/${id}`).then((res) => res.data),
   createPercepcionIibb: (payload) => apiClient.post('/api/ventas/percepciones-iibb', payload).then((res) => res.data),
   updatePercepcionIibb: (id, payload) => apiClient.put(`/api/ventas/percepciones-iibb/${id}`, payload).then((res) => res.data),
+  getClientePercepcionIibbConfig: (clienteExternoId) =>
+    apiClient.get(`/api/ventas/clientes/${clienteExternoId}/percepcion-iibb/configuracion`)
+      .then((res) => res.data)
+      .catch((error) => {
+        if (error?.response?.status === 404) return null;
+        throw error;
+      }),
+  saveClientePercepcionIibbConfig: (clienteExternoId, payload) =>
+    apiClient.put(`/api/ventas/clientes/${clienteExternoId}/percepcion-iibb/configuracion`, payload).then((res) => res.data),
+  getVentaPercepcionIibb: (ventaId) =>
+    apiClient.get(`/api/ventas/${ventaId}/percepciones-iibb`)
+      .then((res) => res.data)
+      .catch((error) => {
+        if (error?.response?.status === 404) return null;
+        throw error;
+      }),
+  calcularVentaPercepcionIibb: (ventaId) =>
+    apiClient.post(`/api/ventas/${ventaId}/percepciones-iibb/calcular`).then((res) => res.data),
   getCategoriasItemsFacturables: (filters = {}) =>
     apiClient.get(`/api/ventas/categorias-items${buildQuery(filters)}`).then((res) => res.data),
   getCategoriaItemFacturable: (id) => apiClient.get(`/api/ventas/categorias-items/${id}`).then((res) => res.data),

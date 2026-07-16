@@ -754,6 +754,7 @@ namespace BudgetControl.Api.Services.Sales
             venta.MonedaCodigo = NormalizeCurrency(request.MonedaCodigo);
             venta.Cotizacion = request.Cotizacion;
             venta.Observaciones = NormalizeOptional(request.Observaciones);
+            MarkPercepcionPendiente(venta);
             venta.FechaModificacion = DateTime.UtcNow;
             venta.UsuarioModificacion = _userContext.UserName;
 
@@ -791,6 +792,7 @@ namespace BudgetControl.Api.Services.Sales
 
             _db.VentasDetalle.Add(detalle);
             venta.Detalles.Add(detalle);
+            MarkPercepcionPendiente(venta);
             _calculador.RecalcularTotales(venta);
             venta.FechaModificacion = DateTime.UtcNow;
             venta.UsuarioModificacion = _userContext.UserName;
@@ -819,6 +821,7 @@ namespace BudgetControl.Api.Services.Sales
             detalle.FechaModificacion = DateTime.UtcNow;
             detalle.UsuarioModificacion = _userContext.UserName;
 
+            MarkPercepcionPendiente(venta);
             _calculador.RecalcularTotales(venta);
             venta.FechaModificacion = DateTime.UtcNow;
             venta.UsuarioModificacion = _userContext.UserName;
@@ -844,6 +847,7 @@ namespace BudgetControl.Api.Services.Sales
 
             _db.VentasDetalle.Remove(detalle);
             venta.Detalles.Remove(detalle);
+            MarkPercepcionPendiente(venta);
             _calculador.RecalcularTotales(venta);
             venta.FechaModificacion = DateTime.UtcNow;
             venta.UsuarioModificacion = _userContext.UserName;
@@ -862,7 +866,8 @@ namespace BudgetControl.Api.Services.Sales
                     .ThenInclude(r => r!.PuntoVenta)
                 .Include(v => v.PuntoVentaComprobante)
                     .ThenInclude(r => r!.TipoComprobante)
-                .Include(v => v.Detalles);
+                .Include(v => v.Detalles)
+                .Include(v => v.PercepcionesIibb);
 
             return asNoTracking ? query.AsNoTracking() : query;
         }
@@ -903,6 +908,7 @@ namespace BudgetControl.Api.Services.Sales
                     .ThenInclude(d => d.CategoriaItemFacturable)
                 .Include(v => v.Detalles)
                     .ThenInclude(d => d.UnidadMedida)
+                .Include(v => v.PercepcionesIibb)
                 .FirstOrDefaultAsync(v => v.Id == ventaId);
 
             return venta ?? throw new InvalidOperationException("Venta no encontrada.");
@@ -1005,6 +1011,14 @@ namespace BudgetControl.Api.Services.Sales
         {
             var lookups = await LoadLookupsAsync(new[] { venta });
             return MapVenta(venta, lookups.Clientes, lookups.Obras);
+        }
+
+        private static void MarkPercepcionPendiente(Venta venta)
+        {
+            if (venta.PercepcionesIibb.Any(p => p.Activa))
+            {
+                venta.PercepcionIibbRequiereRecalculo = true;
+            }
         }
 
         private IQueryable<PuntoVentaComprobante> GetPuntoVentaComprobanteQuery()
@@ -1538,7 +1552,10 @@ namespace BudgetControl.Api.Services.Sales
                 TotalNoGravado = venta.TotalNoGravado,
                 TotalIva = venta.TotalIva,
                 TotalAntesPercepciones = venta.TotalAntesPercepciones,
+                TotalPercepciones = venta.TotalPercepciones,
                 Total = venta.Total,
+                PercepcionIibbRequiereRecalculo = venta.PercepcionIibbRequiereRecalculo,
+                FechaUltimoCalculoPercepcion = venta.FechaUltimoCalculoPercepcion,
                 Estado = venta.Estado,
                 Observaciones = venta.Observaciones,
                 FechaAlta = venta.FechaAlta,
@@ -1548,7 +1565,41 @@ namespace BudgetControl.Api.Services.Sales
                 Detalles = venta.Detalles?
                     .OrderBy(d => d.NumeroLinea)
                     .Select(MapDetalle)
-                    .ToList() ?? new List<VentaDetalleResponse>()
+                    .ToList() ?? new List<VentaDetalleResponse>(),
+                PercepcionesIibb = venta.PercepcionesIibb?
+                    .Where(p => p.Activa)
+                    .OrderBy(p => p.Id)
+                    .Select(MapVentaPercepcionIibb)
+                    .ToList() ?? new List<VentaPercepcionIibbResponse>()
+            };
+        }
+
+        private static VentaPercepcionIibbResponse MapVentaPercepcionIibb(VentaPercepcionIibb percepcion)
+        {
+            return new VentaPercepcionIibbResponse
+            {
+                Id = percepcion.Id,
+                VentaId = percepcion.VentaId,
+                RegimenPercepcionIibbId = percepcion.RegimenPercepcionIibbId,
+                CodigoRegimenAplicado = percepcion.CodigoRegimenAplicado,
+                DescripcionRegimenAplicada = percepcion.DescripcionRegimenAplicada,
+                JurisdiccionAplicada = percepcion.JurisdiccionAplicada,
+                TipoTributoAplicado = percepcion.TipoTributoAplicado,
+                NumeroRegimenAplicado = percepcion.NumeroRegimenAplicado,
+                TipoBaseCalculo = percepcion.TipoBaseCalculo,
+                BaseImponible = percepcion.BaseImponible,
+                AlicuotaAplicada = percepcion.AlicuotaAplicada,
+                Importe = percepcion.Importe,
+                VigenciaDesdeAplicada = percepcion.VigenciaDesdeAplicada,
+                VigenciaHastaAplicada = percepcion.VigenciaHastaAplicada,
+                Resultado = percepcion.Resultado,
+                Motivo = percepcion.Motivo,
+                Activa = percepcion.Activa,
+                EsAutomatica = percepcion.EsAutomatica,
+                FechaAlta = percepcion.FechaAlta,
+                UsuarioAlta = percepcion.UsuarioAlta,
+                FechaModificacion = percepcion.FechaModificacion,
+                UsuarioModificacion = percepcion.UsuarioModificacion
             };
         }
 

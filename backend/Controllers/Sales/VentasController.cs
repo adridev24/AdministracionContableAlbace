@@ -11,10 +11,12 @@ namespace BudgetControl.Api.Controllers.Sales
     public class VentasController : ControllerBase
     {
         private readonly IVentasService _service;
+        private readonly IPercepcionIibbService _percepcionIibbService;
 
-        public VentasController(IVentasService service)
+        public VentasController(IVentasService service, IPercepcionIibbService percepcionIibbService)
         {
             _service = service;
+            _percepcionIibbService = percepcionIibbService;
         }
 
         [HttpGet("tipos-comprobante")]
@@ -280,6 +282,49 @@ namespace BudgetControl.Api.Controllers.Sales
             try
             {
                 return Ok(await _service.UpdatePercepcionIibbAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("clientes/{clienteExternoId}/percepcion-iibb/configuracion")]
+        public async Task<IActionResult> GetClientePercepcionIibbConfig(string clienteExternoId)
+        {
+            var config = await _percepcionIibbService.GetClienteConfigAsync(clienteExternoId);
+            return config == null ? NotFound() : Ok(config);
+        }
+
+        [HttpPut("clientes/{clienteExternoId}/percepcion-iibb/configuracion")]
+        public async Task<IActionResult> SaveClientePercepcionIibbConfig(string clienteExternoId, [FromBody] ClientePercepcionIibbConfigRequest request)
+        {
+            try
+            {
+                request.ClienteExternoId = clienteExternoId;
+                return Ok(await _percepcionIibbService.SaveClienteConfigAsync(request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("{id}/percepciones-iibb")]
+        public async Task<IActionResult> GetVentaPercepcionIibb(int id)
+        {
+            var percepcion = await _percepcionIibbService.GetPercepcionAsync(id);
+            return percepcion == null ? NotFound() : Ok(percepcion);
+        }
+
+        [HttpPost("{id}/percepciones-iibb/calcular")]
+        public async Task<IActionResult> CalcularVentaPercepcionIibb(int id)
+        {
+            try
+            {
+                var result = await _percepcionIibbService.CalcularAsync(id);
+                result.Venta = await _service.GetVentaAsync(id);
+                return Ok(result);
             }
             catch (InvalidOperationException ex)
             {

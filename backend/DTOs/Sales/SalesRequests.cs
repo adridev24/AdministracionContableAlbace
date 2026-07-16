@@ -114,6 +114,21 @@ namespace BudgetControl.Api.DTOs.Sales
         public string? Observaciones { get; set; }
     }
 
+    public class ClientePercepcionIibbConfigRequest
+    {
+        [Required]
+        public string ClienteExternoId { get; set; } = null!;
+
+        public SituacionPercepcionIibbCliente Situacion { get; set; } = SituacionPercepcionIibbCliente.Pendiente;
+        public int? RegimenPercepcionIibbId { get; set; }
+        public string? NumeroInscripcionIibb { get; set; }
+        public string? JurisdiccionIibb { get; set; }
+        public DateTime? ExclusionDesde { get; set; }
+        public DateTime? ExclusionHasta { get; set; }
+        public string? MotivoExclusion { get; set; }
+        public string? Observaciones { get; set; }
+    }
+
     public class AlicuotaIvaVentaRequest
     {
         [Required]

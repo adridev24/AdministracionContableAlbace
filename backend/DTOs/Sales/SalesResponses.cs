@@ -91,7 +91,10 @@ namespace BudgetControl.Api.DTOs.Sales
         public decimal TotalNoGravado { get; set; }
         public decimal TotalIva { get; set; }
         public decimal TotalAntesPercepciones { get; set; }
+        public decimal TotalPercepciones { get; set; }
         public decimal Total { get; set; }
+        public bool PercepcionIibbRequiereRecalculo { get; set; }
+        public DateTime? FechaUltimoCalculoPercepcion { get; set; }
         public VentaEstado Estado { get; set; }
         public string? Observaciones { get; set; }
         public DateTime FechaAlta { get; set; }
@@ -99,6 +102,7 @@ namespace BudgetControl.Api.DTOs.Sales
         public DateTime? FechaModificacion { get; set; }
         public string? UsuarioModificacion { get; set; }
         public List<VentaDetalleResponse> Detalles { get; set; } = new();
+        public List<VentaPercepcionIibbResponse> PercepcionesIibb { get; set; } = new();
     }
 
     public class VentaListResponse
@@ -152,6 +156,59 @@ namespace BudgetControl.Api.DTOs.Sales
     {
         public VentaDetalleResponse? Detalle { get; set; }
         public VentaResponse Venta { get; set; } = null!;
+    }
+
+    public class ClientePercepcionIibbConfigResponse
+    {
+        public int Id { get; set; }
+        public string ClienteExternoId { get; set; } = null!;
+        public SituacionPercepcionIibbCliente Situacion { get; set; }
+        public int? RegimenPercepcionIibbId { get; set; }
+        public string? RegimenCodigo { get; set; }
+        public string? RegimenDescripcion { get; set; }
+        public string? NumeroInscripcionIibb { get; set; }
+        public string? JurisdiccionIibb { get; set; }
+        public DateTime? ExclusionDesde { get; set; }
+        public DateTime? ExclusionHasta { get; set; }
+        public string? MotivoExclusion { get; set; }
+        public string? Observaciones { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class VentaPercepcionIibbResponse
+    {
+        public int Id { get; set; }
+        public int VentaId { get; set; }
+        public int? RegimenPercepcionIibbId { get; set; }
+        public string? CodigoRegimenAplicado { get; set; }
+        public string? DescripcionRegimenAplicada { get; set; }
+        public string? JurisdiccionAplicada { get; set; }
+        public string? TipoTributoAplicado { get; set; }
+        public string? NumeroRegimenAplicado { get; set; }
+        public TipoBaseCalculoPercepcionIibb? TipoBaseCalculo { get; set; }
+        public decimal BaseImponible { get; set; }
+        public decimal AlicuotaAplicada { get; set; }
+        public decimal Importe { get; set; }
+        public DateTime? VigenciaDesdeAplicada { get; set; }
+        public DateTime? VigenciaHastaAplicada { get; set; }
+        public ResultadoPercepcionIibb Resultado { get; set; }
+        public string? Motivo { get; set; }
+        public bool Activa { get; set; }
+        public bool EsAutomatica { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class VentaPercepcionIibbCalculoResponse
+    {
+        public VentaPercepcionIibbResponse? Percepcion { get; set; }
+        public ClientePercepcionIibbConfigResponse? ConfiguracionCliente { get; set; }
+        public VentaResponse? Venta { get; set; }
     }
 
     public class AlicuotaIvaVentaResponse

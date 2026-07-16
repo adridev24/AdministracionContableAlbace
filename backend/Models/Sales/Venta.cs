@@ -30,7 +30,10 @@ namespace BudgetControl.Api.Models.Sales
         public decimal TotalNoGravado { get; set; }
         public decimal TotalIva { get; set; }
         public decimal TotalAntesPercepciones { get; set; }
+        public decimal TotalPercepciones { get; set; }
         public decimal Total { get; set; }
+        public bool PercepcionIibbRequiereRecalculo { get; set; }
+        public DateTime? FechaUltimoCalculoPercepcion { get; set; }
         public VentaEstado Estado { get; set; } = VentaEstado.Borrador;
         public string? Observaciones { get; set; }
         public DateTime FechaAlta { get; set; }
@@ -44,5 +47,6 @@ namespace BudgetControl.Api.Models.Sales
         public TipoComprobanteVenta TipoComprobante { get; set; } = null!;
         public PuntoVentaComprobante? PuntoVentaComprobante { get; set; }
         public ICollection<VentaDetalle> Detalles { get; set; } = new List<VentaDetalle>();
+        public ICollection<VentaPercepcionIibb> PercepcionesIibb { get; set; } = new List<VentaPercepcionIibb>();
     }
 }

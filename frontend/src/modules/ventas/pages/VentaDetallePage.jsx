@@ -4,6 +4,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import SectionCard from '../../../shared/components/SectionCard';
 import VentaDetalleForm from '../components/VentaDetalleForm';
 import VentaDetalleTable from '../components/VentaDetalleTable';
+import VentaPercepcionIibbPanel from '../components/VentaPercepcionIibbPanel';
 import VentaTotalsPanel from '../components/VentaTotalsPanel';
 import ventasService from '../services/ventasService';
 import '../ventas.css';
@@ -18,9 +19,13 @@ const VentaDetallePage = () => {
   const [alicuotas, setAlicuotas] = useState([]);
   const [nomencladores, setNomencladores] = useState([]);
   const [itemsFacturables, setItemsFacturables] = useState([]);
+  const [regimenesIibb, setRegimenesIibb] = useState([]);
+  const [clientePercepcionConfig, setClientePercepcionConfig] = useState(null);
+  const [percepcionIibb, setPercepcionIibb] = useState(null);
   const [selectedDetalle, setSelectedDetalle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [calculatingPercepcion, setCalculatingPercepcion] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -28,16 +33,22 @@ const VentaDetallePage = () => {
     setLoading(true);
     setError('');
     try {
-      const [ventaData, alicuotasData, nomencladoresData, itemsData] = await Promise.all([
-        ventasService.getVenta(ventaId),
+      const ventaData = await ventasService.getVenta(ventaId);
+      const [alicuotasData, nomencladoresData, itemsData, regimenesData, configData, percepcionData] = await Promise.all([
         ventasService.getAlicuotasIva({ soloActivos: true }),
         ventasService.getNomencladores({ soloActivos: true }),
         ventasService.getItemsFacturables({ soloActivos: true }),
+        ventasService.getPercepcionesIibb({ soloActivos: true, soloVigentes: true }),
+        ventasService.getClientePercepcionIibbConfig(ventaData.clienteExternoId),
+        ventasService.getVentaPercepcionIibb(ventaId),
       ]);
       setVenta(ventaData);
       setAlicuotas(alicuotasData || []);
       setNomencladores(nomencladoresData || []);
       setItemsFacturables(itemsData || []);
+      setRegimenesIibb(regimenesData || []);
+      setClientePercepcionConfig(configData);
+      setPercepcionIibb(percepcionData);
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -47,18 +58,25 @@ const VentaDetallePage = () => {
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([
-      ventasService.getVenta(ventaId),
-      ventasService.getAlicuotasIva({ soloActivos: true }),
-      ventasService.getNomencladores({ soloActivos: true }),
-      ventasService.getItemsFacturables({ soloActivos: true }),
-    ])
-      .then(([ventaData, alicuotasData, nomencladoresData, itemsData]) => {
+    ventasService.getVenta(ventaId)
+      .then((ventaData) => Promise.all([
+        Promise.resolve(ventaData),
+        ventasService.getAlicuotasIva({ soloActivos: true }),
+        ventasService.getNomencladores({ soloActivos: true }),
+        ventasService.getItemsFacturables({ soloActivos: true }),
+        ventasService.getPercepcionesIibb({ soloActivos: true, soloVigentes: true }),
+        ventasService.getClientePercepcionIibbConfig(ventaData.clienteExternoId),
+        ventasService.getVentaPercepcionIibb(ventaId),
+      ]))
+      .then(([ventaData, alicuotasData, nomencladoresData, itemsData, regimenesData, configData, percepcionData]) => {
         if (!mounted) return;
         setVenta(ventaData);
         setAlicuotas(alicuotasData || []);
         setNomencladores(nomencladoresData || []);
         setItemsFacturables(itemsData || []);
+        setRegimenesIibb(regimenesData || []);
+        setClientePercepcionConfig(configData);
+        setPercepcionIibb(percepcionData);
       })
       .catch((loadError) => {
         if (mounted) setError(getErrorMessage(loadError));
@@ -80,6 +98,7 @@ const VentaDetallePage = () => {
         : await ventasService.createVentaDetalle(ventaId, payload);
 
       setVenta(response.venta);
+      setPercepcionIibb(response.venta?.percepcionesIibb?.[0] || percepcionIibb);
       setSelectedDetalle(null);
       setMessage(selectedDetalle?.id ? 'Detalle actualizado.' : 'Detalle agregado.');
     } catch (saveError) {
@@ -97,12 +116,45 @@ const VentaDetallePage = () => {
     try {
       const updatedVenta = await ventasService.deleteVentaDetalle(ventaId, detalle.id);
       setVenta(updatedVenta);
+      setPercepcionIibb(updatedVenta?.percepcionesIibb?.[0] || percepcionIibb);
       setSelectedDetalle(null);
       setMessage('Detalle eliminado.');
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSavePercepcionConfig = async (payload) => {
+    setSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      const config = await ventasService.saveClientePercepcionIibbConfig(venta.clienteExternoId, payload);
+      setClientePercepcionConfig(config);
+      setMessage('Configuracion tributaria del cliente guardada.');
+    } catch (configError) {
+      setError(getErrorMessage(configError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCalcularPercepcion = async () => {
+    setCalculatingPercepcion(true);
+    setMessage('');
+    setError('');
+    try {
+      const result = await ventasService.calcularVentaPercepcionIibb(ventaId);
+      setPercepcionIibb(result.percepcion);
+      setClientePercepcionConfig(result.configuracionCliente);
+      if (result.venta) setVenta(result.venta);
+      setMessage('Percepcion de IIBB Entre Rios calculada.');
+    } catch (calcError) {
+      setError(getErrorMessage(calcError));
+    } finally {
+      setCalculatingPercepcion(false);
     }
   };
 
@@ -190,6 +242,19 @@ const VentaDetallePage = () => {
               saving={saving}
               onEdit={setSelectedDetalle}
               onDelete={handleDeleteDetalle}
+            />
+          </SectionCard>
+
+          <SectionCard title="Tributos adicionales">
+            <VentaPercepcionIibbPanel
+              venta={venta}
+              percepcion={percepcionIibb}
+              clienteConfig={clientePercepcionConfig}
+              regimenes={regimenesIibb}
+              saving={saving}
+              calculating={calculatingPercepcion}
+              onSaveConfig={handleSavePercepcionConfig}
+              onCalcular={handleCalcularPercepcion}
             />
           </SectionCard>
 

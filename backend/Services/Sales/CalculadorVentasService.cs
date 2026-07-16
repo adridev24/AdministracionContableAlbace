@@ -34,7 +34,7 @@ namespace BudgetControl.Api.Services.Sales
             venta.TotalNoGravado = RoundMoney(detalles.Where(d => d.TipoTratamientoIva == TipoTratamientoIvaVenta.NoGravado).Sum(d => d.Neto));
             venta.TotalIva = RoundMoney(detalles.Sum(d => d.ImporteIva));
             venta.TotalAntesPercepciones = RoundMoney(detalles.Sum(d => d.TotalLinea));
-            venta.Total = venta.TotalAntesPercepciones;
+            venta.Total = RoundMoney(venta.TotalAntesPercepciones + venta.TotalPercepciones);
         }
 
         private static decimal RoundMoney(decimal value)

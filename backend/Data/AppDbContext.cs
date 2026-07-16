@@ -39,6 +39,8 @@ namespace BudgetControl.Api.Data
         public DbSet<AlicuotaIvaVenta> AlicuotasIvaVenta { get; set; } = null!;
         public DbSet<NomencladorFce> NomencladoresFce { get; set; } = null!;
         public DbSet<PercepcionIibbEntreRios> PercepcionesIibbEntreRios { get; set; } = null!;
+        public DbSet<ClientePercepcionIibbConfig> ClientesPercepcionIibbConfig { get; set; } = null!;
+        public DbSet<VentaPercepcionIibb> VentasPercepcionesIibb { get; set; } = null!;
         public DbSet<CategoriaItemFacturable> CategoriasItemsFacturables { get; set; } = null!;
         public DbSet<UnidadMedidaVenta> UnidadesMedidaVenta { get; set; } = null!;
         public DbSet<ItemFacturable> ItemsFacturables { get; set; } = null!;
@@ -574,7 +576,10 @@ namespace BudgetControl.Api.Data
                 entity.Property(e => e.TotalNoGravado).HasColumnName("total_no_gravado").HasPrecision(18, 2);
                 entity.Property(e => e.TotalIva).HasColumnName("total_iva").HasPrecision(18, 2);
                 entity.Property(e => e.TotalAntesPercepciones).HasColumnName("total_antes_percepciones").HasPrecision(18, 2);
+                entity.Property(e => e.TotalPercepciones).HasColumnName("total_percepciones").HasPrecision(18, 2);
                 entity.Property(e => e.Total).HasColumnName("total").HasPrecision(18, 2);
+                entity.Property(e => e.PercepcionIibbRequiereRecalculo).HasColumnName("percepcion_iibb_requiere_recalculo");
+                entity.Property(e => e.FechaUltimoCalculoPercepcion).HasColumnName("fecha_ultimo_calculo_percepcion");
                 entity.Property(e => e.Estado).HasColumnName("estado").HasDefaultValue(VentaEstado.Borrador);
                 entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
                 entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
@@ -609,6 +614,84 @@ namespace BudgetControl.Api.Data
                 entity.HasOne(e => e.PuntoVentaComprobante)
                     .WithMany(r => r.Ventas)
                     .HasForeignKey(e => e.PuntoVentaComprobanteId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<ClientePercepcionIibbConfig>(entity =>
+            {
+                entity.ToTable("ventas_clientes_percepcion_iibb_config");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.ClienteExternoId).HasColumnName("cliente_externo_id").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Situacion).HasColumnName("situacion");
+                entity.Property(e => e.RegimenPercepcionIibbId).HasColumnName("regimen_percepcion_iibb_id");
+                entity.Property(e => e.NumeroInscripcionIibb).HasColumnName("numero_inscripcion_iibb").HasMaxLength(50);
+                entity.Property(e => e.JurisdiccionIibb).HasColumnName("jurisdiccion_iibb").HasMaxLength(100);
+                entity.Property(e => e.ExclusionDesde).HasColumnName("exclusion_desde");
+                entity.Property(e => e.ExclusionHasta).HasColumnName("exclusion_hasta");
+                entity.Property(e => e.MotivoExclusion).HasColumnName("motivo_exclusion").HasMaxLength(500);
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.ClienteExternoId)
+                    .HasDatabaseName("ix_ventas_clientes_percepcion_iibb_cliente")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.RegimenPercepcionIibbId)
+                    .HasDatabaseName("ix_ventas_clientes_percepcion_iibb_regimen");
+
+                entity.HasOne(e => e.RegimenPercepcionIibb)
+                    .WithMany()
+                    .HasForeignKey(e => e.RegimenPercepcionIibbId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<VentaPercepcionIibb>(entity =>
+            {
+                entity.ToTable("ventas_percepciones_iibb_aplicadas");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.VentaId).HasColumnName("venta_id");
+                entity.Property(e => e.RegimenPercepcionIibbId).HasColumnName("regimen_percepcion_iibb_id");
+                entity.Property(e => e.CodigoRegimenAplicado).HasColumnName("codigo_regimen_aplicado").HasMaxLength(50);
+                entity.Property(e => e.DescripcionRegimenAplicada).HasColumnName("descripcion_regimen_aplicada").HasMaxLength(250);
+                entity.Property(e => e.JurisdiccionAplicada).HasColumnName("jurisdiccion_aplicada").HasMaxLength(100);
+                entity.Property(e => e.TipoTributoAplicado).HasColumnName("tipo_tributo_aplicado").HasMaxLength(50);
+                entity.Property(e => e.NumeroRegimenAplicado).HasColumnName("numero_regimen_aplicado").HasMaxLength(50);
+                entity.Property(e => e.TipoBaseCalculo).HasColumnName("tipo_base_calculo");
+                entity.Property(e => e.BaseImponible).HasColumnName("base_imponible").HasPrecision(18, 2);
+                entity.Property(e => e.AlicuotaAplicada).HasColumnName("alicuota_aplicada").HasPrecision(9, 4);
+                entity.Property(e => e.Importe).HasColumnName("importe").HasPrecision(18, 2);
+                entity.Property(e => e.VigenciaDesdeAplicada).HasColumnName("vigencia_desde_aplicada");
+                entity.Property(e => e.VigenciaHastaAplicada).HasColumnName("vigencia_hasta_aplicada");
+                entity.Property(e => e.Resultado).HasColumnName("resultado");
+                entity.Property(e => e.Motivo).HasColumnName("motivo").HasMaxLength(500);
+                entity.Property(e => e.Activa).HasColumnName("activa");
+                entity.Property(e => e.EsAutomatica).HasColumnName("es_automatica");
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.VentaId)
+                    .HasDatabaseName("ix_ventas_percepciones_aplicadas_venta");
+
+                entity.HasIndex(e => e.RegimenPercepcionIibbId)
+                    .HasDatabaseName("ix_ventas_percepciones_aplicadas_regimen");
+
+                entity.HasIndex(e => new { e.VentaId, e.RegimenPercepcionIibbId, e.Activa })
+                    .HasDatabaseName("ix_ventas_percepciones_aplicadas_venta_regimen_activa");
+
+                entity.HasOne(e => e.Venta)
+                    .WithMany(v => v.PercepcionesIibb)
+                    .HasForeignKey(e => e.VentaId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.RegimenPercepcionIibb)
+                    .WithMany()
+                    .HasForeignKey(e => e.RegimenPercepcionIibbId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
