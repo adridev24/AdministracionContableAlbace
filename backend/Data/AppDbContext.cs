@@ -33,11 +33,15 @@ namespace BudgetControl.Api.Data
         public DbSet<ConfiguracionContableDetalle> ConfiguracionesContablesDetalle { get; set; } = null!;
         public DbSet<TipoComprobanteVenta> TiposComprobanteVenta { get; set; } = null!;
         public DbSet<Venta> Ventas { get; set; } = null!;
+        public DbSet<VentaDetalle> VentasDetalle { get; set; } = null!;
         public DbSet<PuntoVenta> PuntosVenta { get; set; } = null!;
         public DbSet<PuntoVentaComprobante> PuntosVentaComprobantes { get; set; } = null!;
         public DbSet<AlicuotaIvaVenta> AlicuotasIvaVenta { get; set; } = null!;
         public DbSet<NomencladorFce> NomencladoresFce { get; set; } = null!;
         public DbSet<PercepcionIibbEntreRios> PercepcionesIibbEntreRios { get; set; } = null!;
+        public DbSet<CategoriaItemFacturable> CategoriasItemsFacturables { get; set; } = null!;
+        public DbSet<UnidadMedidaVenta> UnidadesMedidaVenta { get; set; } = null!;
+        public DbSet<ItemFacturable> ItemsFacturables { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -563,6 +567,14 @@ namespace BudgetControl.Api.Data
                 entity.Property(e => e.NumeroComprobante).HasColumnName("numero_comprobante");
                 entity.Property(e => e.MonedaCodigo).HasColumnName("moneda_codigo").HasMaxLength(10).IsRequired();
                 entity.Property(e => e.Cotizacion).HasColumnName("cotizacion").HasPrecision(18, 6);
+                entity.Property(e => e.SubtotalBruto).HasColumnName("subtotal_bruto").HasPrecision(18, 2);
+                entity.Property(e => e.TotalDescuentos).HasColumnName("total_descuentos").HasPrecision(18, 2);
+                entity.Property(e => e.NetoGravado).HasColumnName("neto_gravado").HasPrecision(18, 2);
+                entity.Property(e => e.TotalExento).HasColumnName("total_exento").HasPrecision(18, 2);
+                entity.Property(e => e.TotalNoGravado).HasColumnName("total_no_gravado").HasPrecision(18, 2);
+                entity.Property(e => e.TotalIva).HasColumnName("total_iva").HasPrecision(18, 2);
+                entity.Property(e => e.TotalAntesPercepciones).HasColumnName("total_antes_percepciones").HasPrecision(18, 2);
+                entity.Property(e => e.Total).HasColumnName("total").HasPrecision(18, 2);
                 entity.Property(e => e.Estado).HasColumnName("estado").HasDefaultValue(VentaEstado.Borrador);
                 entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
                 entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
@@ -597,6 +609,106 @@ namespace BudgetControl.Api.Data
                 entity.HasOne(e => e.PuntoVentaComprobante)
                     .WithMany(r => r.Ventas)
                     .HasForeignKey(e => e.PuntoVentaComprobanteId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<VentaDetalle>(entity =>
+            {
+                entity.ToTable("ventas_detalles", table =>
+                {
+                    table.HasCheckConstraint("ck_ventas_detalles_cantidad", "cantidad > 0");
+                    table.HasCheckConstraint("ck_ventas_detalles_precio_unitario", "precio_unitario >= 0");
+                    table.HasCheckConstraint("ck_ventas_detalles_descuento", "porcentaje_descuento >= 0 AND porcentaje_descuento <= 100");
+                });
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.VentaId).HasColumnName("venta_id");
+                entity.Property(e => e.NumeroLinea).HasColumnName("numero_linea");
+                entity.Property(e => e.ItemFacturableId).HasColumnName("item_facturable_id");
+                entity.Property(e => e.CodigoItem).HasColumnName("codigo_item").HasMaxLength(100);
+                entity.Property(e => e.ItemFacturableDescripcion).HasColumnName("item_facturable_descripcion").HasMaxLength(200);
+                entity.Property(e => e.CategoriaItemFacturableId).HasColumnName("categoria_item_facturable_id");
+                entity.Property(e => e.CategoriaItemFacturableCodigo).HasColumnName("categoria_item_facturable_codigo").HasMaxLength(50);
+                entity.Property(e => e.CategoriaItemFacturableDescripcion).HasColumnName("categoria_item_facturable_descripcion").HasMaxLength(200);
+                entity.Property(e => e.UnidadMedidaVentaId).HasColumnName("unidad_medida_venta_id");
+                entity.Property(e => e.UnidadMedidaCodigo).HasColumnName("unidad_medida_codigo").HasMaxLength(50);
+                entity.Property(e => e.UnidadMedidaDescripcion).HasColumnName("unidad_medida_descripcion").HasMaxLength(200);
+                entity.Property(e => e.UnidadMedidaAbreviatura).HasColumnName("unidad_medida_abreviatura").HasMaxLength(20);
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(500).IsRequired();
+                entity.Property(e => e.Cantidad).HasColumnName("cantidad").HasPrecision(18, 4);
+                entity.Property(e => e.PrecioUnitario).HasColumnName("precio_unitario").HasPrecision(18, 4);
+                entity.Property(e => e.PorcentajeDescuento).HasColumnName("porcentaje_descuento").HasPrecision(9, 4);
+                entity.Property(e => e.ImporteBruto).HasColumnName("importe_bruto").HasPrecision(18, 2);
+                entity.Property(e => e.ImporteDescuento).HasColumnName("importe_descuento").HasPrecision(18, 2);
+                entity.Property(e => e.Neto).HasColumnName("neto").HasPrecision(18, 2);
+                entity.Property(e => e.TratamientoIvaId).HasColumnName("tratamiento_iva_id");
+                entity.Property(e => e.TratamientoIvaCodigo).HasColumnName("tratamiento_iva_codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.TratamientoIvaDescripcion).HasColumnName("tratamiento_iva_descripcion").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.TipoTratamientoIva).HasColumnName("tipo_tratamiento_iva");
+                entity.Property(e => e.PorcentajeIvaAplicado).HasColumnName("porcentaje_iva_aplicado").HasPrecision(9, 4);
+                entity.Property(e => e.ImporteIva).HasColumnName("importe_iva").HasPrecision(18, 2);
+                entity.Property(e => e.NomencladorId).HasColumnName("nomenclador_id");
+                entity.Property(e => e.NomencladorCodigo).HasColumnName("nomenclador_codigo").HasMaxLength(50);
+                entity.Property(e => e.NomencladorDescripcion).HasColumnName("nomenclador_descripcion").HasMaxLength(250);
+                entity.Property(e => e.TotalLinea).HasColumnName("total_linea").HasPrecision(18, 2);
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.VentaId)
+                    .HasDatabaseName("ix_ventas_detalles_venta_id");
+
+                entity.HasIndex(e => new { e.VentaId, e.NumeroLinea })
+                    .HasDatabaseName("ix_ventas_detalles_venta_linea")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.TratamientoIvaId)
+                    .HasDatabaseName("ix_ventas_detalles_tratamiento_iva_id");
+
+                entity.HasIndex(e => e.NomencladorId)
+                    .HasDatabaseName("ix_ventas_detalles_nomenclador_id");
+
+                entity.HasIndex(e => e.ItemFacturableId)
+                    .HasDatabaseName("ix_ventas_detalles_item_facturable_id");
+
+                entity.HasIndex(e => new { e.VentaId, e.ItemFacturableId })
+                    .HasDatabaseName("ix_ventas_detalles_venta_item_facturable_id");
+
+                entity.HasIndex(e => e.CategoriaItemFacturableId)
+                    .HasDatabaseName("ix_ventas_detalles_categoria_item_facturable_id");
+
+                entity.HasIndex(e => e.UnidadMedidaVentaId)
+                    .HasDatabaseName("ix_ventas_detalles_unidad_medida_venta_id");
+
+                entity.HasOne(e => e.Venta)
+                    .WithMany(v => v.Detalles)
+                    .HasForeignKey(e => e.VentaId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.ItemFacturable)
+                    .WithMany()
+                    .HasForeignKey(e => e.ItemFacturableId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.CategoriaItemFacturable)
+                    .WithMany()
+                    .HasForeignKey(e => e.CategoriaItemFacturableId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.UnidadMedida)
+                    .WithMany()
+                    .HasForeignKey(e => e.UnidadMedidaVentaId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.TratamientoIva)
+                    .WithMany()
+                    .HasForeignKey(e => e.TratamientoIvaId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Nomenclador)
+                    .WithMany()
+                    .HasForeignKey(e => e.NomencladorId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
@@ -676,6 +788,123 @@ namespace BudgetControl.Api.Data
 
                 entity.HasIndex(e => new { e.VigenciaDesde, e.VigenciaHasta })
                     .HasDatabaseName("ix_ventas_percepciones_iibb_vigencia");
+            });
+
+            modelBuilder.Entity<CategoriaItemFacturable>(entity =>
+            {
+                entity.ToTable("ventas_categorias_items_facturables", table =>
+                {
+                    table.HasCheckConstraint("ck_ventas_categorias_items_orden", "orden >= 0");
+                });
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Activo).HasColumnName("activo");
+                entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_ventas_categorias_items_codigo")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.Activo)
+                    .HasDatabaseName("ix_ventas_categorias_items_activo");
+            });
+
+            modelBuilder.Entity<UnidadMedidaVenta>(entity =>
+            {
+                entity.ToTable("ventas_unidades_medida", table =>
+                {
+                    table.HasCheckConstraint("ck_ventas_unidades_medida_orden", "orden >= 0");
+                });
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Abreviatura).HasColumnName("abreviatura").HasMaxLength(20);
+                entity.Property(e => e.PermiteDecimales).HasColumnName("permite_decimales");
+                entity.Property(e => e.Activo).HasColumnName("activo");
+                entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_ventas_unidades_medida_codigo")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.Activo)
+                    .HasDatabaseName("ix_ventas_unidades_medida_activo");
+            });
+
+            modelBuilder.Entity<ItemFacturable>(entity =>
+            {
+                entity.ToTable("ventas_items_facturables", table =>
+                {
+                    table.HasCheckConstraint("ck_ventas_items_facturables_precio", "precio_predeterminado IS NULL OR precio_predeterminado >= 0");
+                    table.HasCheckConstraint("ck_ventas_items_facturables_orden", "orden >= 0");
+                });
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.DescripcionAmpliada).HasColumnName("descripcion_ampliada").HasMaxLength(1000);
+                entity.Property(e => e.CategoriaItemFacturableId).HasColumnName("categoria_item_facturable_id");
+                entity.Property(e => e.UnidadMedidaVentaId).HasColumnName("unidad_medida_venta_id");
+                entity.Property(e => e.TratamientoIvaPredeterminadoId).HasColumnName("tratamiento_iva_predeterminado_id");
+                entity.Property(e => e.NomencladorPredeterminadoId).HasColumnName("nomenclador_predeterminado_id");
+                entity.Property(e => e.PrecioPredeterminado).HasColumnName("precio_predeterminado").HasPrecision(18, 4);
+                entity.Property(e => e.Activo).HasColumnName("activo");
+                entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_ventas_items_facturables_codigo")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.Descripcion)
+                    .HasDatabaseName("ix_ventas_items_facturables_descripcion");
+
+                entity.HasIndex(e => e.CategoriaItemFacturableId)
+                    .HasDatabaseName("ix_ventas_items_facturables_categoria_id");
+
+                entity.HasIndex(e => e.UnidadMedidaVentaId)
+                    .HasDatabaseName("ix_ventas_items_facturables_unidad_id");
+
+                entity.HasIndex(e => e.TratamientoIvaPredeterminadoId)
+                    .HasDatabaseName("ix_ventas_items_facturables_iva_id");
+
+                entity.HasIndex(e => e.NomencladorPredeterminadoId)
+                    .HasDatabaseName("ix_ventas_items_facturables_nomenclador_id");
+
+                entity.HasIndex(e => e.Activo)
+                    .HasDatabaseName("ix_ventas_items_facturables_activo");
+
+                entity.HasOne(e => e.Categoria)
+                    .WithMany(c => c.Items)
+                    .HasForeignKey(e => e.CategoriaItemFacturableId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.UnidadMedida)
+                    .WithMany(u => u.Items)
+                    .HasForeignKey(e => e.UnidadMedidaVentaId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.TratamientoIvaPredeterminado)
+                    .WithMany()
+                    .HasForeignKey(e => e.TratamientoIvaPredeterminadoId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.NomencladorPredeterminado)
+                    .WithMany()
+                    .HasForeignKey(e => e.NomencladorPredeterminadoId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
         }
 

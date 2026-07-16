@@ -13,6 +13,7 @@ namespace BudgetControl.Api.Services.Sales
         Task<PuntoVentaResponse> CreatePuntoVentaAsync(PuntoVentaRequest request);
         Task<PuntoVentaResponse> UpdatePuntoVentaAsync(int id, PuntoVentaRequest request);
         Task<IEnumerable<PuntoVentaComprobanteResponse>> GetComprobantesPorPuntoVentaAsync(int puntoVentaId, bool soloActivos = false);
+        Task<IEnumerable<PuntoVentaSelectorResponse>> GetPuntosVentaPorComprobanteAsync(int tipoComprobanteVentaId, int? relacionActualId = null);
         Task<PuntoVentaComprobanteResponse> CreatePuntoVentaComprobanteAsync(int puntoVentaId, PuntoVentaComprobanteRequest request);
         Task<PuntoVentaComprobanteResponse> UpdatePuntoVentaComprobanteAsync(int puntoVentaId, int relacionId, PuntoVentaComprobanteRequest request);
         Task<IEnumerable<AlicuotaIvaVentaResponse>> GetAlicuotasIvaAsync(bool soloActivos = false, string? search = null);
@@ -27,9 +28,25 @@ namespace BudgetControl.Api.Services.Sales
         Task<PercepcionIibbEntreRiosResponse?> GetPercepcionIibbAsync(int id);
         Task<PercepcionIibbEntreRiosResponse> CreatePercepcionIibbAsync(PercepcionIibbEntreRiosRequest request);
         Task<PercepcionIibbEntreRiosResponse> UpdatePercepcionIibbAsync(int id, PercepcionIibbEntreRiosRequest request);
+        Task<IEnumerable<CategoriaItemFacturableResponse>> GetCategoriasItemsFacturablesAsync(bool soloActivos = false, string? search = null);
+        Task<CategoriaItemFacturableResponse?> GetCategoriaItemFacturableAsync(int id);
+        Task<CategoriaItemFacturableResponse> CreateCategoriaItemFacturableAsync(CategoriaItemFacturableRequest request);
+        Task<CategoriaItemFacturableResponse> UpdateCategoriaItemFacturableAsync(int id, CategoriaItemFacturableRequest request);
+        Task<IEnumerable<UnidadMedidaVentaResponse>> GetUnidadesMedidaAsync(bool soloActivos = false, string? search = null);
+        Task<UnidadMedidaVentaResponse?> GetUnidadMedidaAsync(int id);
+        Task<UnidadMedidaVentaResponse> CreateUnidadMedidaAsync(UnidadMedidaVentaRequest request);
+        Task<UnidadMedidaVentaResponse> UpdateUnidadMedidaAsync(int id, UnidadMedidaVentaRequest request);
+        Task<IEnumerable<ItemFacturableResponse>> GetItemsFacturablesAsync(bool soloActivos = false, string? search = null, int? categoriaId = null, int? unidadMedidaId = null, int? tratamientoIvaId = null, int? nomencladorId = null);
+        Task<ItemFacturableResponse?> GetItemFacturableAsync(int id);
+        Task<ItemFacturableResponse> CreateItemFacturableAsync(ItemFacturableRequest request);
+        Task<ItemFacturableResponse> UpdateItemFacturableAsync(int id, ItemFacturableRequest request);
         Task<VentaListResponse> GetVentasAsync(VentaListFilterRequest filters);
         Task<VentaResponse?> GetVentaAsync(int id);
         Task<VentaResponse> CreateVentaAsync(VentaHeaderRequest request);
         Task<VentaResponse> UpdateVentaAsync(int id, VentaHeaderRequest request);
+        Task<IEnumerable<VentaDetalleResponse>> GetDetallesAsync(int ventaId);
+        Task<VentaDetalleMutationResponse> CreateDetalleAsync(int ventaId, VentaDetalleRequest request);
+        Task<VentaDetalleMutationResponse> UpdateDetalleAsync(int ventaId, int detalleId, VentaDetalleRequest request);
+        Task<VentaResponse> DeleteDetalleAsync(int ventaId, int detalleId);
     }
 }

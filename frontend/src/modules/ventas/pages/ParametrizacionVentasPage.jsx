@@ -37,6 +37,18 @@ const ParametrizacionVentasPage = () => (
           <strong>Percepciones IIBB Entre Rios</strong>
           <span>Regimenes configurables para futuras percepciones en facturas de venta.</span>
         </Link>
+        <Link className="module-menu-item" to="/ventas/parametrizacion/categorias-items">
+          <strong>Categorias de items facturables</strong>
+          <span>Agrupadores opcionales para ordenar productos, servicios o conceptos.</span>
+        </Link>
+        <Link className="module-menu-item" to="/ventas/parametrizacion/unidades-medida">
+          <strong>Unidades de medida</strong>
+          <span>Catalogo de unidades para items facturables con o sin decimales.</span>
+        </Link>
+        <Link className="module-menu-item" to="/ventas/parametrizacion/items-facturables">
+          <strong>Items facturables</strong>
+          <span>Catalogo independiente con IVA, unidad, nomenclador y precio por defecto.</span>
+        </Link>
       </div>
     </SectionCard>
   </div>

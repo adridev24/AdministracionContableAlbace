@@ -18,6 +18,8 @@ const ventasService = {
     apiClient.get(`/api/ventas/configuraciones-comprobante${buildQuery(filters)}`).then((res) => res.data),
   getConfiguracionComprobante: (id) =>
     apiClient.get(`/api/ventas/configuraciones-comprobante/${id}`).then((res) => res.data),
+  getPuntosVentaPorComprobante: (id, filters = {}) =>
+    apiClient.get(`/api/ventas/configuraciones-comprobante/${id}/puntos-venta${buildQuery(filters)}`).then((res) => res.data),
   createConfiguracionComprobante: (payload) =>
     apiClient.post('/api/ventas/configuraciones-comprobante', payload).then((res) => res.data),
   updateConfiguracionComprobante: (id, payload) =>
@@ -48,10 +50,31 @@ const ventasService = {
   getPercepcionIibb: (id) => apiClient.get(`/api/ventas/percepciones-iibb/${id}`).then((res) => res.data),
   createPercepcionIibb: (payload) => apiClient.post('/api/ventas/percepciones-iibb', payload).then((res) => res.data),
   updatePercepcionIibb: (id, payload) => apiClient.put(`/api/ventas/percepciones-iibb/${id}`, payload).then((res) => res.data),
+  getCategoriasItemsFacturables: (filters = {}) =>
+    apiClient.get(`/api/ventas/categorias-items${buildQuery(filters)}`).then((res) => res.data),
+  getCategoriaItemFacturable: (id) => apiClient.get(`/api/ventas/categorias-items/${id}`).then((res) => res.data),
+  createCategoriaItemFacturable: (payload) => apiClient.post('/api/ventas/categorias-items', payload).then((res) => res.data),
+  updateCategoriaItemFacturable: (id, payload) => apiClient.put(`/api/ventas/categorias-items/${id}`, payload).then((res) => res.data),
+  getUnidadesMedida: (filters = {}) =>
+    apiClient.get(`/api/ventas/unidades-medida${buildQuery(filters)}`).then((res) => res.data),
+  getUnidadMedida: (id) => apiClient.get(`/api/ventas/unidades-medida/${id}`).then((res) => res.data),
+  createUnidadMedida: (payload) => apiClient.post('/api/ventas/unidades-medida', payload).then((res) => res.data),
+  updateUnidadMedida: (id, payload) => apiClient.put(`/api/ventas/unidades-medida/${id}`, payload).then((res) => res.data),
+  getItemsFacturables: (filters = {}) =>
+    apiClient.get(`/api/ventas/items-facturables${buildQuery(filters)}`).then((res) => res.data),
+  getItemFacturable: (id) => apiClient.get(`/api/ventas/items-facturables/${id}`).then((res) => res.data),
+  createItemFacturable: (payload) => apiClient.post('/api/ventas/items-facturables', payload).then((res) => res.data),
+  updateItemFacturable: (id, payload) => apiClient.put(`/api/ventas/items-facturables/${id}`, payload).then((res) => res.data),
   getVentas: (filters) => apiClient.get(`/api/ventas${buildQuery(filters)}`).then((res) => res.data),
   getVenta: (id) => apiClient.get(`/api/ventas/${id}`).then((res) => res.data),
   createVenta: (payload) => apiClient.post('/api/ventas', payload).then((res) => res.data),
   updateVenta: (id, payload) => apiClient.put(`/api/ventas/${id}`, payload).then((res) => res.data),
+  getVentaDetalles: (ventaId) => apiClient.get(`/api/ventas/${ventaId}/detalles`).then((res) => res.data),
+  createVentaDetalle: (ventaId, payload) => apiClient.post(`/api/ventas/${ventaId}/detalles`, payload).then((res) => res.data),
+  updateVentaDetalle: (ventaId, detalleId, payload) =>
+    apiClient.put(`/api/ventas/${ventaId}/detalles/${detalleId}`, payload).then((res) => res.data),
+  deleteVentaDetalle: (ventaId, detalleId) =>
+    apiClient.delete(`/api/ventas/${ventaId}/detalles/${detalleId}`).then((res) => res.data),
 };
 
 export default ventasService;

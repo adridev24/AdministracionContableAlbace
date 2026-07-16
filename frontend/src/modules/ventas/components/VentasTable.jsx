@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 const formatDate = (value) => {
   if (!value) return '-';
   return new Date(value).toLocaleDateString();
@@ -44,9 +46,12 @@ const VentasTable = ({ ventas, onEdit }) => {
                 <span className="table-subtext">{venta.usuarioAlta}</span>
               </td>
               <td>
-                <button className="btn-secondary" type="button" onClick={() => onEdit(venta)}>
-                  Editar
-                </button>
+                <div className="row-actions">
+                  <Link className="btn-secondary" to={`/ventas/${venta.id}`}>Detalles</Link>
+                  <button className="btn-secondary" type="button" onClick={() => onEdit(venta)}>
+                    Editar
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

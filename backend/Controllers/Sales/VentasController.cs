@@ -69,6 +69,19 @@ namespace BudgetControl.Api.Controllers.Sales
             return await GetTipoComprobante(id);
         }
 
+        [HttpGet("configuraciones-comprobante/{id}/puntos-venta")]
+        public async Task<IActionResult> GetPuntosVentaPorComprobante(int id, [FromQuery] int? relacionActualId = null)
+        {
+            try
+            {
+                return Ok(await _service.GetPuntosVentaPorComprobanteAsync(id, relacionActualId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpPost("configuraciones-comprobante")]
         public async Task<IActionResult> CreateConfiguracionComprobante([FromBody] TipoComprobanteVentaRequest request)
         {
@@ -274,6 +287,132 @@ namespace BudgetControl.Api.Controllers.Sales
             }
         }
 
+        [HttpGet("categorias-items")]
+        public async Task<IActionResult> GetCategoriasItems([FromQuery] bool soloActivos = false, [FromQuery] string? search = null)
+        {
+            return Ok(await _service.GetCategoriasItemsFacturablesAsync(soloActivos, search));
+        }
+
+        [HttpGet("categorias-items/{id}")]
+        public async Task<IActionResult> GetCategoriaItem(int id)
+        {
+            var item = await _service.GetCategoriaItemFacturableAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+
+        [HttpPost("categorias-items")]
+        public async Task<IActionResult> CreateCategoriaItem([FromBody] CategoriaItemFacturableRequest request)
+        {
+            try
+            {
+                var item = await _service.CreateCategoriaItemFacturableAsync(request);
+                return CreatedAtAction(nameof(GetCategoriaItem), new { id = item.Id }, item);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("categorias-items/{id}")]
+        public async Task<IActionResult> UpdateCategoriaItem(int id, [FromBody] CategoriaItemFacturableRequest request)
+        {
+            try
+            {
+                return Ok(await _service.UpdateCategoriaItemFacturableAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("unidades-medida")]
+        public async Task<IActionResult> GetUnidadesMedida([FromQuery] bool soloActivos = false, [FromQuery] string? search = null)
+        {
+            return Ok(await _service.GetUnidadesMedidaAsync(soloActivos, search));
+        }
+
+        [HttpGet("unidades-medida/{id}")]
+        public async Task<IActionResult> GetUnidadMedida(int id)
+        {
+            var item = await _service.GetUnidadMedidaAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+
+        [HttpPost("unidades-medida")]
+        public async Task<IActionResult> CreateUnidadMedida([FromBody] UnidadMedidaVentaRequest request)
+        {
+            try
+            {
+                var item = await _service.CreateUnidadMedidaAsync(request);
+                return CreatedAtAction(nameof(GetUnidadMedida), new { id = item.Id }, item);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("unidades-medida/{id}")]
+        public async Task<IActionResult> UpdateUnidadMedida(int id, [FromBody] UnidadMedidaVentaRequest request)
+        {
+            try
+            {
+                return Ok(await _service.UpdateUnidadMedidaAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("items-facturables")]
+        public async Task<IActionResult> GetItemsFacturables(
+            [FromQuery] bool soloActivos = false,
+            [FromQuery] string? search = null,
+            [FromQuery] int? categoriaId = null,
+            [FromQuery] int? unidadMedidaId = null,
+            [FromQuery] int? tratamientoIvaId = null,
+            [FromQuery] int? nomencladorId = null)
+        {
+            return Ok(await _service.GetItemsFacturablesAsync(soloActivos, search, categoriaId, unidadMedidaId, tratamientoIvaId, nomencladorId));
+        }
+
+        [HttpGet("items-facturables/{id}")]
+        public async Task<IActionResult> GetItemFacturable(int id)
+        {
+            var item = await _service.GetItemFacturableAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+
+        [HttpPost("items-facturables")]
+        public async Task<IActionResult> CreateItemFacturable([FromBody] ItemFacturableRequest request)
+        {
+            try
+            {
+                var item = await _service.CreateItemFacturableAsync(request);
+                return CreatedAtAction(nameof(GetItemFacturable), new { id = item.Id }, item);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("items-facturables/{id}")]
+        public async Task<IActionResult> UpdateItemFacturable(int id, [FromBody] ItemFacturableRequest request)
+        {
+            try
+            {
+                return Ok(await _service.UpdateItemFacturableAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetVentas([FromQuery] VentaListFilterRequest filters)
         {
@@ -307,6 +446,58 @@ namespace BudgetControl.Api.Controllers.Sales
             try
             {
                 return Ok(await _service.UpdateVentaAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("{ventaId}/detalles")]
+        public async Task<IActionResult> GetDetalles(int ventaId)
+        {
+            try
+            {
+                return Ok(await _service.GetDetallesAsync(ventaId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("{ventaId}/detalles")]
+        public async Task<IActionResult> CreateDetalle(int ventaId, [FromBody] VentaDetalleRequest request)
+        {
+            try
+            {
+                return Ok(await _service.CreateDetalleAsync(ventaId, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("{ventaId}/detalles/{detalleId}")]
+        public async Task<IActionResult> UpdateDetalle(int ventaId, int detalleId, [FromBody] VentaDetalleRequest request)
+        {
+            try
+            {
+                return Ok(await _service.UpdateDetalleAsync(ventaId, detalleId, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpDelete("{ventaId}/detalles/{detalleId}")]
+        public async Task<IActionResult> DeleteDetalle(int ventaId, int detalleId)
+        {
+            try
+            {
+                return Ok(await _service.DeleteDetalleAsync(ventaId, detalleId));
             }
             catch (InvalidOperationException ex)
             {

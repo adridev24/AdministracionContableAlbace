@@ -3,6 +3,7 @@ using System;
 using BudgetControl.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BudgetControl.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715135009_SalesBillableItemsParametrization")]
+    partial class SalesBillableItemsParametrization
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2140,20 +2143,6 @@ namespace BudgetControl.Api.Migrations
                         .HasColumnType("numeric(18,4)")
                         .HasColumnName("cantidad");
 
-                    b.Property<string>("CategoriaItemFacturableCodigo")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("categoria_item_facturable_codigo");
-
-                    b.Property<string>("CategoriaItemFacturableDescripcion")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("categoria_item_facturable_descripcion");
-
-                    b.Property<int?>("CategoriaItemFacturableId")
-                        .HasColumnType("integer")
-                        .HasColumnName("categoria_item_facturable_id");
-
                     b.Property<string>("CodigoItem")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -2187,15 +2176,6 @@ namespace BudgetControl.Api.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("importe_iva");
-
-                    b.Property<string>("ItemFacturableDescripcion")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("item_facturable_descripcion");
-
-                    b.Property<int?>("ItemFacturableId")
-                        .HasColumnType("integer")
-                        .HasColumnName("item_facturable_id");
 
                     b.Property<decimal>("Neto")
                         .HasPrecision(18, 2)
@@ -2265,25 +2245,6 @@ namespace BudgetControl.Api.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("tratamiento_iva_id");
 
-                    b.Property<string>("UnidadMedidaAbreviatura")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("unidad_medida_abreviatura");
-
-                    b.Property<string>("UnidadMedidaCodigo")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("unidad_medida_codigo");
-
-                    b.Property<string>("UnidadMedidaDescripcion")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("unidad_medida_descripcion");
-
-                    b.Property<int?>("UnidadMedidaVentaId")
-                        .HasColumnType("integer")
-                        .HasColumnName("unidad_medida_venta_id");
-
                     b.Property<string>("UsuarioAlta")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -2301,26 +2262,14 @@ namespace BudgetControl.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategoriaItemFacturableId")
-                        .HasDatabaseName("ix_ventas_detalles_categoria_item_facturable_id");
-
-                    b.HasIndex("ItemFacturableId")
-                        .HasDatabaseName("ix_ventas_detalles_item_facturable_id");
-
                     b.HasIndex("NomencladorId")
                         .HasDatabaseName("ix_ventas_detalles_nomenclador_id");
 
                     b.HasIndex("TratamientoIvaId")
                         .HasDatabaseName("ix_ventas_detalles_tratamiento_iva_id");
 
-                    b.HasIndex("UnidadMedidaVentaId")
-                        .HasDatabaseName("ix_ventas_detalles_unidad_medida_venta_id");
-
                     b.HasIndex("VentaId")
                         .HasDatabaseName("ix_ventas_detalles_venta_id");
-
-                    b.HasIndex("VentaId", "ItemFacturableId")
-                        .HasDatabaseName("ix_ventas_detalles_venta_item_facturable_id");
 
                     b.HasIndex("VentaId", "NumeroLinea")
                         .IsUnique()
@@ -2658,16 +2607,6 @@ namespace BudgetControl.Api.Migrations
 
             modelBuilder.Entity("BudgetControl.Api.Models.Sales.VentaDetalle", b =>
                 {
-                    b.HasOne("BudgetControl.Api.Models.Sales.CategoriaItemFacturable", "CategoriaItemFacturable")
-                        .WithMany()
-                        .HasForeignKey("CategoriaItemFacturableId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("BudgetControl.Api.Models.Sales.ItemFacturable", "ItemFacturable")
-                        .WithMany()
-                        .HasForeignKey("ItemFacturableId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("BudgetControl.Api.Models.Sales.NomencladorFce", "Nomenclador")
                         .WithMany()
                         .HasForeignKey("NomencladorId")
@@ -2679,26 +2618,15 @@ namespace BudgetControl.Api.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("BudgetControl.Api.Models.Sales.UnidadMedidaVenta", "UnidadMedida")
-                        .WithMany()
-                        .HasForeignKey("UnidadMedidaVentaId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("BudgetControl.Api.Models.Sales.Venta", "Venta")
                         .WithMany("Detalles")
                         .HasForeignKey("VentaId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CategoriaItemFacturable");
-
-                    b.Navigation("ItemFacturable");
-
                     b.Navigation("Nomenclador");
 
                     b.Navigation("TratamientoIva");
-
-                    b.Navigation("UnidadMedida");
 
                     b.Navigation("Venta");
                 });

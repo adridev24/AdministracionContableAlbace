@@ -1,15 +1,23 @@
 import VentasHomePage from '../pages/VentasHomePage';
+import VentaDetallePage from '../pages/VentaDetallePage';
 import ParametrizacionVentasPage from '../pages/ParametrizacionVentasPage';
 import ConfiguracionesComprobantePage from '../pages/ConfiguracionesComprobantePage';
 import PuntosVentaPage from '../pages/PuntosVentaPage';
 import AlicuotasIvaPage from '../pages/AlicuotasIvaPage';
 import NomencladoresFcePage from '../pages/NomencladoresFcePage';
 import PercepcionesIibbPage from '../pages/PercepcionesIibbPage';
+import CategoriasItemsFacturablesPage from '../pages/CategoriasItemsFacturablesPage';
+import UnidadesMedidaPage from '../pages/UnidadesMedidaPage';
+import ItemsFacturablesPage from '../pages/ItemsFacturablesPage';
 
 const ventasRoutes = [
   {
     path: '/ventas',
     element: <VentasHomePage />,
+  },
+  {
+    path: '/ventas/:ventaId',
+    element: <VentaDetallePage />,
   },
   {
     path: '/ventas/parametrizacion',
@@ -34,6 +42,18 @@ const ventasRoutes = [
   {
     path: '/ventas/parametrizacion/percepciones-iibb',
     element: <PercepcionesIibbPage />,
+  },
+  {
+    path: '/ventas/parametrizacion/categorias-items',
+    element: <CategoriasItemsFacturablesPage />,
+  },
+  {
+    path: '/ventas/parametrizacion/unidades-medida',
+    element: <UnidadesMedidaPage />,
+  },
+  {
+    path: '/ventas/parametrizacion/items-facturables',
+    element: <ItemsFacturablesPage />,
   },
 ];
 

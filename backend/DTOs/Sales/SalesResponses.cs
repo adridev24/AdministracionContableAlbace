@@ -53,6 +53,16 @@ namespace BudgetControl.Api.DTOs.Sales
         public string? UsuarioModificacion { get; set; }
     }
 
+    public class PuntoVentaSelectorResponse
+    {
+        public int PuntoVentaComprobanteId { get; set; }
+        public int PuntoVentaId { get; set; }
+        public int Numero { get; set; }
+        public string Descripcion { get; set; } = null!;
+        public string TextoMostrar { get; set; } = null!;
+        public bool Habilitado { get; set; }
+    }
+
     public class VentaResponse
     {
         public int Id { get; set; }
@@ -74,12 +84,21 @@ namespace BudgetControl.Api.DTOs.Sales
         public long NumeroComprobante { get; set; }
         public string MonedaCodigo { get; set; } = null!;
         public decimal Cotizacion { get; set; }
+        public decimal SubtotalBruto { get; set; }
+        public decimal TotalDescuentos { get; set; }
+        public decimal NetoGravado { get; set; }
+        public decimal TotalExento { get; set; }
+        public decimal TotalNoGravado { get; set; }
+        public decimal TotalIva { get; set; }
+        public decimal TotalAntesPercepciones { get; set; }
+        public decimal Total { get; set; }
         public VentaEstado Estado { get; set; }
         public string? Observaciones { get; set; }
         public DateTime FechaAlta { get; set; }
         public string UsuarioAlta { get; set; } = null!;
         public DateTime? FechaModificacion { get; set; }
         public string? UsuarioModificacion { get; set; }
+        public List<VentaDetalleResponse> Detalles { get; set; } = new();
     }
 
     public class VentaListResponse
@@ -88,6 +107,51 @@ namespace BudgetControl.Api.DTOs.Sales
         public int Page { get; set; }
         public int PageSize { get; set; }
         public List<VentaResponse> Items { get; set; } = new();
+    }
+
+    public class VentaDetalleResponse
+    {
+        public int Id { get; set; }
+        public int VentaId { get; set; }
+        public int NumeroLinea { get; set; }
+        public int? ItemFacturableId { get; set; }
+        public string? CodigoItem { get; set; }
+        public string? ItemFacturableDescripcion { get; set; }
+        public int? CategoriaItemFacturableId { get; set; }
+        public string? CategoriaItemFacturableCodigo { get; set; }
+        public string? CategoriaItemFacturableDescripcion { get; set; }
+        public int? UnidadMedidaVentaId { get; set; }
+        public string? UnidadMedidaCodigo { get; set; }
+        public string? UnidadMedidaDescripcion { get; set; }
+        public string? UnidadMedidaAbreviatura { get; set; }
+        public string Descripcion { get; set; } = null!;
+        public decimal Cantidad { get; set; }
+        public decimal PrecioUnitario { get; set; }
+        public decimal PorcentajeDescuento { get; set; }
+        public decimal ImporteBruto { get; set; }
+        public decimal ImporteDescuento { get; set; }
+        public decimal Neto { get; set; }
+        public int TratamientoIvaId { get; set; }
+        public string TratamientoIvaCodigo { get; set; } = null!;
+        public string TratamientoIvaDescripcion { get; set; } = null!;
+        public TipoTratamientoIvaVenta TipoTratamientoIva { get; set; }
+        public decimal PorcentajeIvaAplicado { get; set; }
+        public decimal ImporteIva { get; set; }
+        public int? NomencladorId { get; set; }
+        public string? NomencladorCodigo { get; set; }
+        public string? NomencladorDescripcion { get; set; }
+        public decimal TotalLinea { get; set; }
+        public string? Observaciones { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class VentaDetalleMutationResponse
+    {
+        public VentaDetalleResponse? Detalle { get; set; }
+        public VentaResponse Venta { get; set; } = null!;
     }
 
     public class AlicuotaIvaVentaResponse
@@ -132,6 +196,63 @@ namespace BudgetControl.Api.DTOs.Sales
         public decimal? MontoMinimo { get; set; }
         public DateTime VigenciaDesde { get; set; }
         public DateTime? VigenciaHasta { get; set; }
+        public bool Activo { get; set; }
+        public int Orden { get; set; }
+        public string? Observaciones { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class CategoriaItemFacturableResponse
+    {
+        public int Id { get; set; }
+        public string Codigo { get; set; } = null!;
+        public string Descripcion { get; set; } = null!;
+        public bool Activo { get; set; }
+        public int Orden { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class UnidadMedidaVentaResponse
+    {
+        public int Id { get; set; }
+        public string Codigo { get; set; } = null!;
+        public string Descripcion { get; set; } = null!;
+        public string? Abreviatura { get; set; }
+        public bool PermiteDecimales { get; set; }
+        public bool Activo { get; set; }
+        public int Orden { get; set; }
+        public DateTime FechaAlta { get; set; }
+        public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+    }
+
+    public class ItemFacturableResponse
+    {
+        public int Id { get; set; }
+        public string Codigo { get; set; } = null!;
+        public string Descripcion { get; set; } = null!;
+        public string? DescripcionAmpliada { get; set; }
+        public int? CategoriaItemFacturableId { get; set; }
+        public string? CategoriaCodigo { get; set; }
+        public string? CategoriaDescripcion { get; set; }
+        public int UnidadMedidaVentaId { get; set; }
+        public string UnidadMedidaCodigo { get; set; } = null!;
+        public string UnidadMedidaDescripcion { get; set; } = null!;
+        public string? UnidadMedidaAbreviatura { get; set; }
+        public int TratamientoIvaPredeterminadoId { get; set; }
+        public string TratamientoIvaCodigo { get; set; } = null!;
+        public string TratamientoIvaDescripcion { get; set; } = null!;
+        public int? NomencladorPredeterminadoId { get; set; }
+        public string? NomencladorCodigo { get; set; }
+        public string? NomencladorDescripcion { get; set; }
+        public decimal? PrecioPredeterminado { get; set; }
         public bool Activo { get; set; }
         public int Orden { get; set; }
         public string? Observaciones { get; set; }

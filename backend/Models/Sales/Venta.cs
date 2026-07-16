@@ -23,6 +23,14 @@ namespace BudgetControl.Api.Models.Sales
         public string MonedaCodigo { get; set; } = "ARS";
 
         public decimal Cotizacion { get; set; } = 1;
+        public decimal SubtotalBruto { get; set; }
+        public decimal TotalDescuentos { get; set; }
+        public decimal NetoGravado { get; set; }
+        public decimal TotalExento { get; set; }
+        public decimal TotalNoGravado { get; set; }
+        public decimal TotalIva { get; set; }
+        public decimal TotalAntesPercepciones { get; set; }
+        public decimal Total { get; set; }
         public VentaEstado Estado { get; set; } = VentaEstado.Borrador;
         public string? Observaciones { get; set; }
         public DateTime FechaAlta { get; set; }
@@ -35,5 +43,6 @@ namespace BudgetControl.Api.Models.Sales
 
         public TipoComprobanteVenta TipoComprobante { get; set; } = null!;
         public PuntoVentaComprobante? PuntoVentaComprobante { get; set; }
+        public ICollection<VentaDetalle> Detalles { get; set; } = new List<VentaDetalle>();
     }
 }

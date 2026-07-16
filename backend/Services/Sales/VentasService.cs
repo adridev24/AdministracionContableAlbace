@@ -15,12 +15,14 @@ namespace BudgetControl.Api.Services.Sales
         private readonly AppDbContext _db;
         private readonly IExternalDataService _externalDataService;
         private readonly IUserContext _userContext;
+        private readonly ICalculadorVentasService _calculador;
 
-        public VentasService(AppDbContext db, IExternalDataService externalDataService, IUserContext userContext)
+        public VentasService(AppDbContext db, IExternalDataService externalDataService, IUserContext userContext, ICalculadorVentasService calculador)
         {
             _db = db;
             _externalDataService = externalDataService;
             _userContext = userContext;
+            _calculador = calculador;
         }
 
         public async Task<IEnumerable<TipoComprobanteVentaResponse>> GetTiposComprobanteAsync(bool soloActivos = false)
@@ -179,6 +181,34 @@ namespace BudgetControl.Api.Services.Sales
                 .ToListAsync();
 
             return relaciones.Select(MapPuntoVentaComprobante);
+        }
+
+        public async Task<IEnumerable<PuntoVentaSelectorResponse>> GetPuntosVentaPorComprobanteAsync(int tipoComprobanteVentaId, int? relacionActualId = null)
+        {
+            var tipo = await _db.TiposComprobanteVenta.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tipoComprobanteVentaId);
+            if (tipo == null) throw new InvalidOperationException("Configuracion de comprobante no encontrada.");
+            if (!tipo.Activo) throw new InvalidOperationException("La configuracion de comprobante se encuentra inactiva.");
+
+            var query = GetPuntoVentaComprobanteQuery()
+                .Where(r => r.TipoComprobanteVentaId == tipoComprobanteVentaId);
+
+            if (relacionActualId.HasValue)
+            {
+                query = query.Where(r =>
+                    (r.Activo && r.PuntoVenta.Activo && r.TipoComprobante.Activo) ||
+                    r.Id == relacionActualId.Value);
+            }
+            else
+            {
+                query = query.Where(r => r.Activo && r.PuntoVenta.Activo && r.TipoComprobante.Activo);
+            }
+
+            var relaciones = await query
+                .OrderBy(r => r.PuntoVenta.Numero)
+                .ThenBy(r => r.PuntoVenta.Descripcion)
+                .ToListAsync();
+
+            return relaciones.Select(MapPuntoVentaSelector);
         }
 
         public async Task<PuntoVentaComprobanteResponse> CreatePuntoVentaComprobanteAsync(int puntoVentaId, PuntoVentaComprobanteRequest request)
@@ -434,6 +464,201 @@ namespace BudgetControl.Api.Services.Sales
             return MapPercepcionIibb(item);
         }
 
+        public async Task<IEnumerable<CategoriaItemFacturableResponse>> GetCategoriasItemsFacturablesAsync(bool soloActivos = false, string? search = null)
+        {
+            var query = _db.CategoriasItemsFacturables.AsNoTracking();
+            if (soloActivos) query = query.Where(c => c.Activo);
+            query = ApplySearch(query, search, c => c.Codigo, c => c.Descripcion);
+
+            var items = await query.OrderBy(c => c.Orden).ThenBy(c => c.Descripcion).ToListAsync();
+            return items.Select(MapCategoriaItemFacturable);
+        }
+
+        public async Task<CategoriaItemFacturableResponse?> GetCategoriaItemFacturableAsync(int id)
+        {
+            var item = await _db.CategoriasItemsFacturables.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+            return item == null ? null : MapCategoriaItemFacturable(item);
+        }
+
+        public async Task<CategoriaItemFacturableResponse> CreateCategoriaItemFacturableAsync(CategoriaItemFacturableRequest request)
+        {
+            var codigo = NormalizeCode(request.Codigo);
+            await ValidateCategoriaItemFacturableRequestAsync(request, codigo, null);
+
+            var item = new CategoriaItemFacturable
+            {
+                Codigo = codigo,
+                Descripcion = NormalizeRequired(request.Descripcion, "La descripcion es obligatoria."),
+                Activo = request.Activo,
+                Orden = request.Orden,
+                FechaAlta = DateTime.UtcNow,
+                UsuarioAlta = _userContext.UserName
+            };
+
+            _db.CategoriasItemsFacturables.Add(item);
+            await _db.SaveChangesAsync();
+            return MapCategoriaItemFacturable(item);
+        }
+
+        public async Task<CategoriaItemFacturableResponse> UpdateCategoriaItemFacturableAsync(int id, CategoriaItemFacturableRequest request)
+        {
+            var item = await _db.CategoriasItemsFacturables.FirstOrDefaultAsync(c => c.Id == id);
+            if (item == null) throw new InvalidOperationException("Categoria de item facturable no encontrada.");
+
+            var codigo = NormalizeCode(request.Codigo);
+            await ValidateCategoriaItemFacturableRequestAsync(request, codigo, id);
+
+            item.Codigo = codigo;
+            item.Descripcion = NormalizeRequired(request.Descripcion, "La descripcion es obligatoria.");
+            item.Activo = request.Activo;
+            item.Orden = request.Orden;
+            item.FechaModificacion = DateTime.UtcNow;
+            item.UsuarioModificacion = _userContext.UserName;
+
+            await _db.SaveChangesAsync();
+            return MapCategoriaItemFacturable(item);
+        }
+
+        public async Task<IEnumerable<UnidadMedidaVentaResponse>> GetUnidadesMedidaAsync(bool soloActivos = false, string? search = null)
+        {
+            var query = _db.UnidadesMedidaVenta.AsNoTracking();
+            if (soloActivos) query = query.Where(u => u.Activo);
+            query = ApplySearch(query, search, u => u.Codigo, u => u.Descripcion, u => u.Abreviatura);
+
+            var items = await query.OrderBy(u => u.Orden).ThenBy(u => u.Descripcion).ToListAsync();
+            return items.Select(MapUnidadMedida);
+        }
+
+        public async Task<UnidadMedidaVentaResponse?> GetUnidadMedidaAsync(int id)
+        {
+            var item = await _db.UnidadesMedidaVenta.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+            return item == null ? null : MapUnidadMedida(item);
+        }
+
+        public async Task<UnidadMedidaVentaResponse> CreateUnidadMedidaAsync(UnidadMedidaVentaRequest request)
+        {
+            var codigo = NormalizeCode(request.Codigo);
+            await ValidateUnidadMedidaRequestAsync(request, codigo, null);
+
+            var item = new UnidadMedidaVenta
+            {
+                Codigo = codigo,
+                Descripcion = NormalizeRequired(request.Descripcion, "La descripcion es obligatoria."),
+                Abreviatura = NormalizeOptional(request.Abreviatura),
+                PermiteDecimales = request.PermiteDecimales,
+                Activo = request.Activo,
+                Orden = request.Orden,
+                FechaAlta = DateTime.UtcNow,
+                UsuarioAlta = _userContext.UserName
+            };
+
+            _db.UnidadesMedidaVenta.Add(item);
+            await _db.SaveChangesAsync();
+            return MapUnidadMedida(item);
+        }
+
+        public async Task<UnidadMedidaVentaResponse> UpdateUnidadMedidaAsync(int id, UnidadMedidaVentaRequest request)
+        {
+            var item = await _db.UnidadesMedidaVenta.FirstOrDefaultAsync(u => u.Id == id);
+            if (item == null) throw new InvalidOperationException("Unidad de medida no encontrada.");
+
+            var codigo = NormalizeCode(request.Codigo);
+            await ValidateUnidadMedidaRequestAsync(request, codigo, id);
+
+            item.Codigo = codigo;
+            item.Descripcion = NormalizeRequired(request.Descripcion, "La descripcion es obligatoria.");
+            item.Abreviatura = NormalizeOptional(request.Abreviatura);
+            item.PermiteDecimales = request.PermiteDecimales;
+            item.Activo = request.Activo;
+            item.Orden = request.Orden;
+            item.FechaModificacion = DateTime.UtcNow;
+            item.UsuarioModificacion = _userContext.UserName;
+
+            await _db.SaveChangesAsync();
+            return MapUnidadMedida(item);
+        }
+
+        public async Task<IEnumerable<ItemFacturableResponse>> GetItemsFacturablesAsync(bool soloActivos = false, string? search = null, int? categoriaId = null, int? unidadMedidaId = null, int? tratamientoIvaId = null, int? nomencladorId = null)
+        {
+            var query = GetItemsFacturablesQuery();
+            if (soloActivos) query = query.Where(i => i.Activo);
+            if (categoriaId.HasValue) query = query.Where(i => i.CategoriaItemFacturableId == categoriaId.Value);
+            if (unidadMedidaId.HasValue) query = query.Where(i => i.UnidadMedidaVentaId == unidadMedidaId.Value);
+            if (tratamientoIvaId.HasValue) query = query.Where(i => i.TratamientoIvaPredeterminadoId == tratamientoIvaId.Value);
+            if (nomencladorId.HasValue) query = query.Where(i => i.NomencladorPredeterminadoId == nomencladorId.Value);
+            query = ApplySearch(query, search, i => i.Codigo, i => i.Descripcion, i => i.DescripcionAmpliada);
+
+            var items = await query.OrderBy(i => i.Orden).ThenBy(i => i.Descripcion).ToListAsync();
+            return items.Select(MapItemFacturable);
+        }
+
+        public async Task<ItemFacturableResponse?> GetItemFacturableAsync(int id)
+        {
+            var item = await GetItemsFacturablesQuery().FirstOrDefaultAsync(i => i.Id == id);
+            return item == null ? null : MapItemFacturable(item);
+        }
+
+        public async Task<ItemFacturableResponse> CreateItemFacturableAsync(ItemFacturableRequest request)
+        {
+            var codigo = NormalizeCode(request.Codigo);
+            var normalized = await ValidateItemFacturableRequestAsync(request, codigo, null);
+
+            var item = new ItemFacturable
+            {
+                Codigo = codigo,
+                Descripcion = NormalizeRequired(request.Descripcion, "La descripcion es obligatoria."),
+                DescripcionAmpliada = NormalizeOptional(request.DescripcionAmpliada),
+                CategoriaItemFacturableId = normalized.Categoria?.Id,
+                UnidadMedidaVentaId = normalized.Unidad.Id,
+                TratamientoIvaPredeterminadoId = normalized.TratamientoIva.Id,
+                NomencladorPredeterminadoId = normalized.Nomenclador?.Id,
+                PrecioPredeterminado = request.PrecioPredeterminado,
+                Activo = request.Activo,
+                Orden = request.Orden,
+                Observaciones = NormalizeOptional(request.Observaciones),
+                FechaAlta = DateTime.UtcNow,
+                UsuarioAlta = _userContext.UserName
+            };
+
+            _db.ItemsFacturables.Add(item);
+            await _db.SaveChangesAsync();
+            item.Categoria = normalized.Categoria;
+            item.UnidadMedida = normalized.Unidad;
+            item.TratamientoIvaPredeterminado = normalized.TratamientoIva;
+            item.NomencladorPredeterminado = normalized.Nomenclador;
+            return MapItemFacturable(item);
+        }
+
+        public async Task<ItemFacturableResponse> UpdateItemFacturableAsync(int id, ItemFacturableRequest request)
+        {
+            var item = await GetItemsFacturablesQuery(false).FirstOrDefaultAsync(i => i.Id == id);
+            if (item == null) throw new InvalidOperationException("Item facturable no encontrado.");
+
+            var codigo = NormalizeCode(request.Codigo);
+            var normalized = await ValidateItemFacturableRequestAsync(request, codigo, id);
+
+            item.Codigo = codigo;
+            item.Descripcion = NormalizeRequired(request.Descripcion, "La descripcion es obligatoria.");
+            item.DescripcionAmpliada = NormalizeOptional(request.DescripcionAmpliada);
+            item.CategoriaItemFacturableId = normalized.Categoria?.Id;
+            item.Categoria = normalized.Categoria;
+            item.UnidadMedidaVentaId = normalized.Unidad.Id;
+            item.UnidadMedida = normalized.Unidad;
+            item.TratamientoIvaPredeterminadoId = normalized.TratamientoIva.Id;
+            item.TratamientoIvaPredeterminado = normalized.TratamientoIva;
+            item.NomencladorPredeterminadoId = normalized.Nomenclador?.Id;
+            item.NomencladorPredeterminado = normalized.Nomenclador;
+            item.PrecioPredeterminado = request.PrecioPredeterminado;
+            item.Activo = request.Activo;
+            item.Orden = request.Orden;
+            item.Observaciones = NormalizeOptional(request.Observaciones);
+            item.FechaModificacion = DateTime.UtcNow;
+            item.UsuarioModificacion = _userContext.UserName;
+
+            await _db.SaveChangesAsync();
+            return MapItemFacturable(item);
+        }
+
         public async Task<VentaListResponse> GetVentasAsync(VentaListFilterRequest filters)
         {
             var page = Math.Max(filters.Page, 1);
@@ -514,6 +739,10 @@ namespace BudgetControl.Api.Services.Sales
             if (venta.Estado != VentaEstado.Borrador) throw new InvalidOperationException("Solo una venta en estado Borrador puede modificarse.");
 
             var normalized = await ValidateRequestAsync(request, id);
+            if (venta.Detalles.Any() && normalized.Relacion.Id != venta.PuntoVentaComprobanteId)
+            {
+                throw new InvalidOperationException("No se puede cambiar la configuracion de comprobante o punto de venta porque la venta ya posee detalles.");
+            }
 
             venta.TipoComprobanteVentaId = normalized.Relacion.TipoComprobanteVentaId;
             venta.PuntoVentaComprobanteId = normalized.Relacion.Id;
@@ -535,6 +764,96 @@ namespace BudgetControl.Api.Services.Sales
             return MapVenta(venta, new Dictionary<string, Client> { [venta.ClienteExternoId] = normalized.Cliente }, new Dictionary<string, Obra> { [venta.ObraExternaId] = normalized.Obra });
         }
 
+        public async Task<IEnumerable<VentaDetalleResponse>> GetDetallesAsync(int ventaId)
+        {
+            var exists = await _db.Ventas.AnyAsync(v => v.Id == ventaId);
+            if (!exists) throw new InvalidOperationException("Venta no encontrada.");
+
+            var detalles = await GetDetalleQuery()
+                .Where(d => d.VentaId == ventaId)
+                .OrderBy(d => d.NumeroLinea)
+                .ToListAsync();
+
+            return detalles.Select(MapDetalle);
+        }
+
+        public async Task<VentaDetalleMutationResponse> CreateDetalleAsync(int ventaId, VentaDetalleRequest request)
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            var venta = await GetVentaForDetalleAsync(ventaId);
+            EnsureBorrador(venta);
+
+            var normalized = await ValidateDetalleRequestAsync(venta, request);
+            var nextLine = venta.Detalles.Any() ? venta.Detalles.Max(d => d.NumeroLinea) + 1 : 1;
+            var detalle = BuildDetalle(venta.Id, nextLine, request, normalized);
+            detalle.FechaAlta = DateTime.UtcNow;
+            detalle.UsuarioAlta = _userContext.UserName;
+
+            _db.VentasDetalle.Add(detalle);
+            venta.Detalles.Add(detalle);
+            _calculador.RecalcularTotales(venta);
+            venta.FechaModificacion = DateTime.UtcNow;
+            venta.UsuarioModificacion = _userContext.UserName;
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return new VentaDetalleMutationResponse
+            {
+                Detalle = MapDetalle(detalle),
+                Venta = await BuildVentaResponseAsync(venta)
+            };
+        }
+
+        public async Task<VentaDetalleMutationResponse> UpdateDetalleAsync(int ventaId, int detalleId, VentaDetalleRequest request)
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            var venta = await GetVentaForDetalleAsync(ventaId);
+            EnsureBorrador(venta);
+
+            var detalle = venta.Detalles.FirstOrDefault(d => d.Id == detalleId);
+            if (detalle == null) throw new InvalidOperationException("Detalle no encontrado para la venta indicada.");
+
+            var normalized = await ValidateDetalleRequestAsync(venta, request);
+            ApplyDetalle(detalle, request, normalized);
+            detalle.FechaModificacion = DateTime.UtcNow;
+            detalle.UsuarioModificacion = _userContext.UserName;
+
+            _calculador.RecalcularTotales(venta);
+            venta.FechaModificacion = DateTime.UtcNow;
+            venta.UsuarioModificacion = _userContext.UserName;
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return new VentaDetalleMutationResponse
+            {
+                Detalle = MapDetalle(detalle),
+                Venta = await BuildVentaResponseAsync(venta)
+            };
+        }
+
+        public async Task<VentaResponse> DeleteDetalleAsync(int ventaId, int detalleId)
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            var venta = await GetVentaForDetalleAsync(ventaId);
+            EnsureBorrador(venta);
+
+            var detalle = venta.Detalles.FirstOrDefault(d => d.Id == detalleId);
+            if (detalle == null) throw new InvalidOperationException("Detalle no encontrado para la venta indicada.");
+
+            _db.VentasDetalle.Remove(detalle);
+            venta.Detalles.Remove(detalle);
+            _calculador.RecalcularTotales(venta);
+            venta.FechaModificacion = DateTime.UtcNow;
+            venta.UsuarioModificacion = _userContext.UserName;
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return await BuildVentaResponseAsync(venta);
+        }
+
         private IQueryable<Venta> GetVentaQuery(bool asNoTracking = true)
         {
             var query = _db.Ventas
@@ -542,9 +861,150 @@ namespace BudgetControl.Api.Services.Sales
                 .Include(v => v.PuntoVentaComprobante)
                     .ThenInclude(r => r!.PuntoVenta)
                 .Include(v => v.PuntoVentaComprobante)
-                    .ThenInclude(r => r!.TipoComprobante);
+                    .ThenInclude(r => r!.TipoComprobante)
+                .Include(v => v.Detalles);
 
             return asNoTracking ? query.AsNoTracking() : query;
+        }
+
+        private IQueryable<VentaDetalle> GetDetalleQuery()
+        {
+            return _db.VentasDetalle
+                .AsNoTracking()
+                .Include(d => d.ItemFacturable)
+                .Include(d => d.CategoriaItemFacturable)
+                .Include(d => d.UnidadMedida)
+                .Include(d => d.TratamientoIva)
+                .Include(d => d.Nomenclador);
+        }
+
+        private IQueryable<ItemFacturable> GetItemsFacturablesQuery(bool asNoTracking = true)
+        {
+            var query = _db.ItemsFacturables
+                .Include(i => i.Categoria)
+                .Include(i => i.UnidadMedida)
+                .Include(i => i.TratamientoIvaPredeterminado)
+                .Include(i => i.NomencladorPredeterminado);
+
+            return asNoTracking ? query.AsNoTracking() : query;
+        }
+
+        private async Task<Venta> GetVentaForDetalleAsync(int ventaId)
+        {
+            var venta = await _db.Ventas
+                .Include(v => v.TipoComprobante)
+                .Include(v => v.PuntoVentaComprobante)
+                    .ThenInclude(r => r!.PuntoVenta)
+                .Include(v => v.PuntoVentaComprobante)
+                    .ThenInclude(r => r!.TipoComprobante)
+                .Include(v => v.Detalles)
+                    .ThenInclude(d => d.ItemFacturable)
+                .Include(v => v.Detalles)
+                    .ThenInclude(d => d.CategoriaItemFacturable)
+                .Include(v => v.Detalles)
+                    .ThenInclude(d => d.UnidadMedida)
+                .FirstOrDefaultAsync(v => v.Id == ventaId);
+
+            return venta ?? throw new InvalidOperationException("Venta no encontrada.");
+        }
+
+        private static void EnsureBorrador(Venta venta)
+        {
+            if (venta.Estado != VentaEstado.Borrador) throw new InvalidOperationException("Solo una venta en estado Borrador permite modificar detalles.");
+        }
+
+        private async Task<ValidatedDetalleRequest> ValidateDetalleRequestAsync(Venta venta, VentaDetalleRequest request)
+        {
+            var descripcion = NormalizeRequired(request.Descripcion, "La descripcion del detalle es obligatoria.");
+            if (request.Cantidad <= 0) throw new InvalidOperationException("La cantidad debe ser mayor que cero.");
+            if (request.PrecioUnitario < 0) throw new InvalidOperationException("El precio unitario no puede ser negativo.");
+            if (request.PorcentajeDescuento < 0 || request.PorcentajeDescuento > 100) throw new InvalidOperationException("El descuento debe estar entre 0 y 100.");
+
+            if (!request.ItemFacturableId.HasValue) throw new InvalidOperationException("El item facturable es obligatorio para nuevos detalles.");
+            var item = await GetItemsFacturablesQuery(false).FirstOrDefaultAsync(i => i.Id == request.ItemFacturableId.Value);
+            if (item == null) throw new InvalidOperationException("Item facturable no encontrado.");
+            if (!item.Activo) throw new InvalidOperationException("El item facturable se encuentra inactivo.");
+            if (!item.UnidadMedida.Activo) throw new InvalidOperationException("La unidad de medida del item se encuentra inactiva.");
+
+            var tratamiento = await _db.AlicuotasIvaVenta.FirstOrDefaultAsync(a => a.Id == request.TratamientoIvaId);
+            if (tratamiento == null) throw new InvalidOperationException("Tratamiento de IVA no encontrado.");
+            if (!tratamiento.Activo) throw new InvalidOperationException("El tratamiento de IVA se encuentra inactivo.");
+            if (venta.TipoComprobante.EsExportacion && tratamiento.TipoTratamiento == TipoTratamientoIvaVenta.Gravado)
+            {
+                throw new InvalidOperationException("Un comprobante de exportacion no permite tratamiento de IVA gravado local.");
+            }
+
+            NomencladorFce? nomenclador = null;
+            if (venta.TipoComprobante.RequiereNomenclador)
+            {
+                if (!request.NomencladorId.HasValue) throw new InvalidOperationException("El comprobante requiere nomenclador en cada detalle.");
+                nomenclador = await _db.NomencladoresFce.FirstOrDefaultAsync(n => n.Id == request.NomencladorId.Value);
+                if (nomenclador == null) throw new InvalidOperationException("Nomenclador no encontrado.");
+                if (!nomenclador.Activo) throw new InvalidOperationException("El nomenclador se encuentra inactivo.");
+            }
+            else if (request.NomencladorId.HasValue)
+            {
+                nomenclador = await _db.NomencladoresFce.FirstOrDefaultAsync(n => n.Id == request.NomencladorId.Value);
+                if (nomenclador == null) throw new InvalidOperationException("Nomenclador no encontrado.");
+                if (!nomenclador.Activo) throw new InvalidOperationException("El nomenclador se encuentra inactivo.");
+            }
+
+            var calculo = _calculador.CalcularDetalle(request.Cantidad, request.PrecioUnitario, request.PorcentajeDescuento, venta.TipoComprobante, tratamiento);
+            return new ValidatedDetalleRequest(descripcion, item, tratamiento, nomenclador, calculo);
+        }
+
+        private VentaDetalle BuildDetalle(int ventaId, int numeroLinea, VentaDetalleRequest request, ValidatedDetalleRequest validated)
+        {
+            var detalle = new VentaDetalle
+            {
+                VentaId = ventaId,
+                NumeroLinea = numeroLinea
+            };
+            ApplyDetalle(detalle, request, validated);
+            return detalle;
+        }
+
+        private static void ApplyDetalle(VentaDetalle detalle, VentaDetalleRequest request, ValidatedDetalleRequest validated)
+        {
+            detalle.ItemFacturableId = validated.ItemFacturable.Id;
+            detalle.ItemFacturable = validated.ItemFacturable;
+            detalle.CodigoItem = validated.ItemFacturable.Codigo;
+            detalle.ItemFacturableDescripcion = validated.ItemFacturable.Descripcion;
+            detalle.CategoriaItemFacturableId = validated.ItemFacturable.Categoria?.Id;
+            detalle.CategoriaItemFacturable = validated.ItemFacturable.Categoria;
+            detalle.CategoriaItemFacturableCodigo = validated.ItemFacturable.Categoria?.Codigo;
+            detalle.CategoriaItemFacturableDescripcion = validated.ItemFacturable.Categoria?.Descripcion;
+            detalle.UnidadMedidaVentaId = validated.ItemFacturable.UnidadMedida.Id;
+            detalle.UnidadMedida = validated.ItemFacturable.UnidadMedida;
+            detalle.UnidadMedidaCodigo = validated.ItemFacturable.UnidadMedida.Codigo;
+            detalle.UnidadMedidaDescripcion = validated.ItemFacturable.UnidadMedida.Descripcion;
+            detalle.UnidadMedidaAbreviatura = validated.ItemFacturable.UnidadMedida.Abreviatura;
+            detalle.Descripcion = validated.Descripcion;
+            detalle.Cantidad = request.Cantidad;
+            detalle.PrecioUnitario = request.PrecioUnitario;
+            detalle.PorcentajeDescuento = request.PorcentajeDescuento;
+            detalle.ImporteBruto = validated.Calculo.ImporteBruto;
+            detalle.ImporteDescuento = validated.Calculo.ImporteDescuento;
+            detalle.Neto = validated.Calculo.Neto;
+            detalle.TratamientoIvaId = validated.TratamientoIva.Id;
+            detalle.TratamientoIva = validated.TratamientoIva;
+            detalle.TratamientoIvaCodigo = validated.TratamientoIva.Codigo;
+            detalle.TratamientoIvaDescripcion = validated.TratamientoIva.Descripcion;
+            detalle.TipoTratamientoIva = validated.TratamientoIva.TipoTratamiento;
+            detalle.PorcentajeIvaAplicado = validated.Calculo.PorcentajeIvaAplicado;
+            detalle.ImporteIva = validated.Calculo.ImporteIva;
+            detalle.NomencladorId = validated.Nomenclador?.Id;
+            detalle.Nomenclador = validated.Nomenclador;
+            detalle.NomencladorCodigo = validated.Nomenclador?.Codigo;
+            detalle.NomencladorDescripcion = validated.Nomenclador?.Descripcion;
+            detalle.TotalLinea = validated.Calculo.TotalLinea;
+            detalle.Observaciones = NormalizeOptional(request.Observaciones);
+        }
+
+        private async Task<VentaResponse> BuildVentaResponseAsync(Venta venta)
+        {
+            var lookups = await LoadLookupsAsync(new[] { venta });
+            return MapVenta(venta, lookups.Clientes, lookups.Obras);
         }
 
         private IQueryable<PuntoVentaComprobante> GetPuntoVentaComprobanteQuery()
@@ -758,6 +1218,63 @@ namespace BudgetControl.Api.Services.Sales
             if (overlaps) throw new InvalidOperationException("Ya existe una percepcion equivalente vigente para el periodo indicado.");
         }
 
+        private async Task ValidateCategoriaItemFacturableRequestAsync(CategoriaItemFacturableRequest request, string codigo, int? id)
+        {
+            NormalizeRequired(codigo, "El codigo es obligatorio.");
+            NormalizeRequired(request.Descripcion, "La descripcion es obligatoria.");
+            if (request.Orden < 0) throw new InvalidOperationException("El orden debe ser mayor o igual a cero.");
+
+            var exists = await _db.CategoriasItemsFacturables.AnyAsync(c => c.Codigo == codigo && (!id.HasValue || c.Id != id.Value));
+            if (exists) throw new InvalidOperationException("Ya existe una categoria de item con ese codigo.");
+        }
+
+        private async Task ValidateUnidadMedidaRequestAsync(UnidadMedidaVentaRequest request, string codigo, int? id)
+        {
+            NormalizeRequired(codigo, "El codigo es obligatorio.");
+            NormalizeRequired(request.Descripcion, "La descripcion es obligatoria.");
+            if (request.Orden < 0) throw new InvalidOperationException("El orden debe ser mayor o igual a cero.");
+
+            var exists = await _db.UnidadesMedidaVenta.AnyAsync(u => u.Codigo == codigo && (!id.HasValue || u.Id != id.Value));
+            if (exists) throw new InvalidOperationException("Ya existe una unidad de medida con ese codigo.");
+        }
+
+        private async Task<ValidatedItemFacturableRequest> ValidateItemFacturableRequestAsync(ItemFacturableRequest request, string codigo, int? id)
+        {
+            NormalizeRequired(codigo, "El codigo es obligatorio.");
+            NormalizeRequired(request.Descripcion, "La descripcion es obligatoria.");
+            if (request.Orden < 0) throw new InvalidOperationException("El orden debe ser mayor o igual a cero.");
+            if (request.PrecioPredeterminado.HasValue && request.PrecioPredeterminado.Value < 0) throw new InvalidOperationException("El precio predeterminado no puede ser negativo.");
+
+            var exists = await _db.ItemsFacturables.AnyAsync(i => i.Codigo == codigo && (!id.HasValue || i.Id != id.Value));
+            if (exists) throw new InvalidOperationException("Ya existe un item facturable con ese codigo.");
+
+            CategoriaItemFacturable? categoria = null;
+            if (request.CategoriaItemFacturableId.HasValue)
+            {
+                categoria = await _db.CategoriasItemsFacturables.FirstOrDefaultAsync(c => c.Id == request.CategoriaItemFacturableId.Value);
+                if (categoria == null) throw new InvalidOperationException("Categoria de item no encontrada.");
+                if (!categoria.Activo) throw new InvalidOperationException("La categoria seleccionada se encuentra inactiva.");
+            }
+
+            var unidad = await _db.UnidadesMedidaVenta.FirstOrDefaultAsync(u => u.Id == request.UnidadMedidaVentaId);
+            if (unidad == null) throw new InvalidOperationException("Unidad de medida no encontrada.");
+            if (!unidad.Activo) throw new InvalidOperationException("La unidad de medida seleccionada se encuentra inactiva.");
+
+            var tratamientoIva = await _db.AlicuotasIvaVenta.FirstOrDefaultAsync(a => a.Id == request.TratamientoIvaPredeterminadoId);
+            if (tratamientoIva == null) throw new InvalidOperationException("Tratamiento de IVA no encontrado.");
+            if (!tratamientoIva.Activo) throw new InvalidOperationException("El tratamiento de IVA seleccionado se encuentra inactivo.");
+
+            NomencladorFce? nomenclador = null;
+            if (request.NomencladorPredeterminadoId.HasValue)
+            {
+                nomenclador = await _db.NomencladoresFce.FirstOrDefaultAsync(n => n.Id == request.NomencladorPredeterminadoId.Value);
+                if (nomenclador == null) throw new InvalidOperationException("Nomenclador FCE no encontrado.");
+                if (!nomenclador.Activo) throw new InvalidOperationException("El nomenclador FCE seleccionado se encuentra inactivo.");
+            }
+
+            return new ValidatedItemFacturableRequest(categoria, unidad, tratamientoIva, nomenclador);
+        }
+
         private async Task<(Dictionary<string, Client> Clientes, Dictionary<string, Obra> Obras)> LoadLookupsAsync(IEnumerable<Venta> ventas)
         {
             var clientes = new Dictionary<string, Client>();
@@ -848,6 +1365,20 @@ namespace BudgetControl.Api.Services.Sales
             };
         }
 
+        private static PuntoVentaSelectorResponse MapPuntoVentaSelector(PuntoVentaComprobante relacion)
+        {
+            var habilitado = relacion.Activo && relacion.PuntoVenta.Activo && relacion.TipoComprobante.Activo;
+            return new PuntoVentaSelectorResponse
+            {
+                PuntoVentaComprobanteId = relacion.Id,
+                PuntoVentaId = relacion.PuntoVentaId,
+                Numero = relacion.PuntoVenta.Numero,
+                Descripcion = relacion.PuntoVenta.Descripcion,
+                TextoMostrar = $"{relacion.PuntoVenta.Numero:0000} - {relacion.PuntoVenta.Descripcion}",
+                Habilitado = habilitado
+            };
+        }
+
         private static AlicuotaIvaVentaResponse MapAlicuotaIva(AlicuotaIvaVenta item)
         {
             return new AlicuotaIvaVentaResponse
@@ -908,6 +1439,72 @@ namespace BudgetControl.Api.Services.Sales
             };
         }
 
+        private static CategoriaItemFacturableResponse MapCategoriaItemFacturable(CategoriaItemFacturable item)
+        {
+            return new CategoriaItemFacturableResponse
+            {
+                Id = item.Id,
+                Codigo = item.Codigo,
+                Descripcion = item.Descripcion,
+                Activo = item.Activo,
+                Orden = item.Orden,
+                FechaAlta = item.FechaAlta,
+                UsuarioAlta = item.UsuarioAlta,
+                FechaModificacion = item.FechaModificacion,
+                UsuarioModificacion = item.UsuarioModificacion
+            };
+        }
+
+        private static UnidadMedidaVentaResponse MapUnidadMedida(UnidadMedidaVenta item)
+        {
+            return new UnidadMedidaVentaResponse
+            {
+                Id = item.Id,
+                Codigo = item.Codigo,
+                Descripcion = item.Descripcion,
+                Abreviatura = item.Abreviatura,
+                PermiteDecimales = item.PermiteDecimales,
+                Activo = item.Activo,
+                Orden = item.Orden,
+                FechaAlta = item.FechaAlta,
+                UsuarioAlta = item.UsuarioAlta,
+                FechaModificacion = item.FechaModificacion,
+                UsuarioModificacion = item.UsuarioModificacion
+            };
+        }
+
+        private static ItemFacturableResponse MapItemFacturable(ItemFacturable item)
+        {
+            return new ItemFacturableResponse
+            {
+                Id = item.Id,
+                Codigo = item.Codigo,
+                Descripcion = item.Descripcion,
+                DescripcionAmpliada = item.DescripcionAmpliada,
+                CategoriaItemFacturableId = item.CategoriaItemFacturableId,
+                CategoriaCodigo = item.Categoria?.Codigo,
+                CategoriaDescripcion = item.Categoria?.Descripcion,
+                UnidadMedidaVentaId = item.UnidadMedidaVentaId,
+                UnidadMedidaCodigo = item.UnidadMedida.Codigo,
+                UnidadMedidaDescripcion = item.UnidadMedida.Descripcion,
+                UnidadMedidaAbreviatura = item.UnidadMedida.Abreviatura,
+                TratamientoIvaPredeterminadoId = item.TratamientoIvaPredeterminadoId,
+                TratamientoIvaCodigo = item.TratamientoIvaPredeterminado.Codigo,
+                TratamientoIvaDescripcion = item.TratamientoIvaPredeterminado.Descripcion,
+                NomencladorPredeterminadoId = item.NomencladorPredeterminadoId,
+                NomencladorCodigo = item.NomencladorPredeterminado?.Codigo,
+                NomencladorDescripcion = item.NomencladorPredeterminado?.Descripcion,
+                PrecioPredeterminado = item.PrecioPredeterminado,
+                Activo = item.Activo,
+                Orden = item.Orden,
+                Observaciones = item.Observaciones,
+                FechaAlta = item.FechaAlta,
+                UsuarioAlta = item.UsuarioAlta,
+                FechaModificacion = item.FechaModificacion,
+                UsuarioModificacion = item.UsuarioModificacion
+            };
+        }
+
         private static VentaResponse MapVenta(Venta venta, IReadOnlyDictionary<string, Client> clientes, IReadOnlyDictionary<string, Obra> obras)
         {
             clientes.TryGetValue(venta.ClienteExternoId, out var cliente);
@@ -934,12 +1531,66 @@ namespace BudgetControl.Api.Services.Sales
                 NumeroComprobante = venta.NumeroComprobante,
                 MonedaCodigo = venta.MonedaCodigo,
                 Cotizacion = venta.Cotizacion,
+                SubtotalBruto = venta.SubtotalBruto,
+                TotalDescuentos = venta.TotalDescuentos,
+                NetoGravado = venta.NetoGravado,
+                TotalExento = venta.TotalExento,
+                TotalNoGravado = venta.TotalNoGravado,
+                TotalIva = venta.TotalIva,
+                TotalAntesPercepciones = venta.TotalAntesPercepciones,
+                Total = venta.Total,
                 Estado = venta.Estado,
                 Observaciones = venta.Observaciones,
                 FechaAlta = venta.FechaAlta,
                 UsuarioAlta = venta.UsuarioAlta,
                 FechaModificacion = venta.FechaModificacion,
-                UsuarioModificacion = venta.UsuarioModificacion
+                UsuarioModificacion = venta.UsuarioModificacion,
+                Detalles = venta.Detalles?
+                    .OrderBy(d => d.NumeroLinea)
+                    .Select(MapDetalle)
+                    .ToList() ?? new List<VentaDetalleResponse>()
+            };
+        }
+
+        private static VentaDetalleResponse MapDetalle(VentaDetalle detalle)
+        {
+            return new VentaDetalleResponse
+            {
+                Id = detalle.Id,
+                VentaId = detalle.VentaId,
+                NumeroLinea = detalle.NumeroLinea,
+                ItemFacturableId = detalle.ItemFacturableId,
+                CodigoItem = detalle.CodigoItem,
+                ItemFacturableDescripcion = detalle.ItemFacturableDescripcion,
+                CategoriaItemFacturableId = detalle.CategoriaItemFacturableId,
+                CategoriaItemFacturableCodigo = detalle.CategoriaItemFacturableCodigo,
+                CategoriaItemFacturableDescripcion = detalle.CategoriaItemFacturableDescripcion,
+                UnidadMedidaVentaId = detalle.UnidadMedidaVentaId,
+                UnidadMedidaCodigo = detalle.UnidadMedidaCodigo,
+                UnidadMedidaDescripcion = detalle.UnidadMedidaDescripcion,
+                UnidadMedidaAbreviatura = detalle.UnidadMedidaAbreviatura,
+                Descripcion = detalle.Descripcion,
+                Cantidad = detalle.Cantidad,
+                PrecioUnitario = detalle.PrecioUnitario,
+                PorcentajeDescuento = detalle.PorcentajeDescuento,
+                ImporteBruto = detalle.ImporteBruto,
+                ImporteDescuento = detalle.ImporteDescuento,
+                Neto = detalle.Neto,
+                TratamientoIvaId = detalle.TratamientoIvaId,
+                TratamientoIvaCodigo = detalle.TratamientoIvaCodigo,
+                TratamientoIvaDescripcion = detalle.TratamientoIvaDescripcion,
+                TipoTratamientoIva = detalle.TipoTratamientoIva,
+                PorcentajeIvaAplicado = detalle.PorcentajeIvaAplicado,
+                ImporteIva = detalle.ImporteIva,
+                NomencladorId = detalle.NomencladorId,
+                NomencladorCodigo = detalle.NomencladorCodigo,
+                NomencladorDescripcion = detalle.NomencladorDescripcion,
+                TotalLinea = detalle.TotalLinea,
+                Observaciones = detalle.Observaciones,
+                FechaAlta = detalle.FechaAlta,
+                UsuarioAlta = detalle.UsuarioAlta,
+                FechaModificacion = detalle.FechaModificacion,
+                UsuarioModificacion = detalle.UsuarioModificacion
             };
         }
 
@@ -1044,5 +1695,7 @@ namespace BudgetControl.Api.Services.Sales
         }
 
         private sealed record ValidatedVentaRequest(PuntoVentaComprobante Relacion, Client Cliente, Obra Obra);
+        private sealed record ValidatedDetalleRequest(string Descripcion, ItemFacturable ItemFacturable, AlicuotaIvaVenta TratamientoIva, NomencladorFce? Nomenclador, VentaDetalleCalculo Calculo);
+        private sealed record ValidatedItemFacturableRequest(CategoriaItemFacturable? Categoria, UnidadMedidaVenta Unidad, AlicuotaIvaVenta TratamientoIva, NomencladorFce? Nomenclador);
     }
 }

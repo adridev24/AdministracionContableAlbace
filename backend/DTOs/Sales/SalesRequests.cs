@@ -90,6 +90,30 @@ namespace BudgetControl.Api.DTOs.Sales
         public int PageSize { get; set; } = 50;
     }
 
+    public class VentaDetalleRequest
+    {
+        public int? ItemFacturableId { get; set; }
+        public string? CodigoItem { get; set; }
+
+        [Required]
+        public string Descripcion { get; set; } = null!;
+
+        [Range(0.0001, double.MaxValue)]
+        public decimal Cantidad { get; set; }
+
+        [Range(0, double.MaxValue)]
+        public decimal PrecioUnitario { get; set; }
+
+        [Range(0, 100)]
+        public decimal PorcentajeDescuento { get; set; }
+
+        [Required]
+        public int TratamientoIvaId { get; set; }
+
+        public int? NomencladorId { get; set; }
+        public string? Observaciones { get; set; }
+    }
+
     public class AlicuotaIvaVentaRequest
     {
         [Required]
@@ -148,6 +172,59 @@ namespace BudgetControl.Api.DTOs.Sales
         public DateTime VigenciaDesde { get; set; }
 
         public DateTime? VigenciaHasta { get; set; }
+        public bool Activo { get; set; } = true;
+        public int Orden { get; set; }
+        public string? Observaciones { get; set; }
+    }
+
+    public class CategoriaItemFacturableRequest
+    {
+        [Required]
+        public string Codigo { get; set; } = null!;
+
+        [Required]
+        public string Descripcion { get; set; } = null!;
+
+        public bool Activo { get; set; } = true;
+        public int Orden { get; set; }
+    }
+
+    public class UnidadMedidaVentaRequest
+    {
+        [Required]
+        public string Codigo { get; set; } = null!;
+
+        [Required]
+        public string Descripcion { get; set; } = null!;
+
+        public string? Abreviatura { get; set; }
+        public bool PermiteDecimales { get; set; } = true;
+        public bool Activo { get; set; } = true;
+        public int Orden { get; set; }
+    }
+
+    public class ItemFacturableRequest
+    {
+        [Required]
+        public string Codigo { get; set; } = null!;
+
+        [Required]
+        public string Descripcion { get; set; } = null!;
+
+        public string? DescripcionAmpliada { get; set; }
+        public int? CategoriaItemFacturableId { get; set; }
+
+        [Required]
+        public int UnidadMedidaVentaId { get; set; }
+
+        [Required]
+        public int TratamientoIvaPredeterminadoId { get; set; }
+
+        public int? NomencladorPredeterminadoId { get; set; }
+
+        [Range(0, double.MaxValue)]
+        public decimal? PrecioPredeterminado { get; set; }
+
         public bool Activo { get; set; } = true;
         public int Orden { get; set; }
         public string? Observaciones { get; set; }
