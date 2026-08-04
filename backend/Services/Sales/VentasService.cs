@@ -791,7 +791,10 @@ namespace BudgetControl.Api.Services.Sales
             detalle.UsuarioAlta = _userContext.UserName;
 
             _db.VentasDetalle.Add(detalle);
-            venta.Detalles.Add(detalle);
+            if (!venta.Detalles.Any(d => ReferenceEquals(d, detalle)))
+            {
+                venta.Detalles.Add(detalle);
+            }
             MarkPercepcionPendiente(venta);
             _calculador.RecalcularTotales(venta);
             venta.FechaModificacion = DateTime.UtcNow;
@@ -1564,6 +1567,9 @@ namespace BudgetControl.Api.Services.Sales
                 UsuarioModificacion = venta.UsuarioModificacion,
                 Detalles = venta.Detalles?
                     .OrderBy(d => d.NumeroLinea)
+                    .ThenBy(d => d.Id)
+                    .GroupBy(d => d.Id)
+                    .Select(g => g.First())
                     .Select(MapDetalle)
                     .ToList() ?? new List<VentaDetalleResponse>(),
                 PercepcionesIibb = venta.PercepcionesIibb?
