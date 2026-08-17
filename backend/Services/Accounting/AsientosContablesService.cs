@@ -191,29 +191,42 @@ namespace BudgetControl.Api.Services.Accounting
             int? idAsientoRevertido,
             List<CrearAsientoContableDetalleRequest> detalles)
         {
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            var ownsTransaction = _db.Database.CurrentTransaction == null;
+            var transaction = ownsTransaction ? await _db.Database.BeginTransactionAsync() : null;
+            try
+            {
+                var normalizedDescripcion = NormalizeRequired(descripcion, "La descripcion del asiento es obligatoria.");
+                await ValidateDetallesAsync(detalles, requireActiveAccounts: true);
+                ValidateBalance(detalles);
 
-            var normalizedDescripcion = NormalizeRequired(descripcion, "La descripcion del asiento es obligatoria.");
-            await ValidateDetallesAsync(detalles, requireActiveAccounts: true);
-            ValidateBalance(detalles);
+                var asiento = BuildAsiento(
+                    fecha,
+                    normalizedDescripcion,
+                    moduloOrigen,
+                    idOrigen,
+                    esAutomatico,
+                    esReversion,
+                    idAsientoRevertido,
+                    detalles,
+                    _userContext.UserName);
 
-            var asiento = BuildAsiento(
-                fecha,
-                normalizedDescripcion,
-                moduloOrigen,
-                idOrigen,
-                esAutomatico,
-                esReversion,
-                idAsientoRevertido,
-                detalles,
-                _userContext.UserName);
+                _db.AsientosContables.Add(asiento);
+                await _db.SaveChangesAsync();
+                if (transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
 
-            _db.AsientosContables.Add(asiento);
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            var saved = await GetAsientoAsync(asiento.Id);
-            return saved!;
+                var saved = await GetAsientoAsync(asiento.Id);
+                return saved!;
+            }
+            finally
+            {
+                if (transaction != null)
+                {
+                    await transaction.DisposeAsync();
+                }
+            }
         }
 
         private AsientoContable BuildAsiento(

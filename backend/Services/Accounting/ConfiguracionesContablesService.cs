@@ -9,7 +9,7 @@ namespace BudgetControl.Api.Services.Accounting
     {
         private static readonly IReadOnlyList<TipoOperacionContableResponse> TiposOperacion = new List<TipoOperacionContableResponse>
         {
-            new() { Codigo = "FACTURA_VENTA", Descripcion = "Factura de venta", ConceptosSugeridos = new() { "CLIENTES", "VENTA_NETA", "IVA_DEBITO" } },
+            new() { Codigo = "FACTURA_VENTA", Descripcion = "Factura de venta", ConceptosSugeridos = new() { "CLIENTES", "VENTA_NETA", "IVA_DEBITO", "PERCEPCION_IIBB" } },
             new() { Codigo = "COBRO_CLIENTE", Descripcion = "Cobro de cliente", ConceptosSugeridos = new() { "CAJA", "BANCO", "CLIENTES" } },
             new() { Codigo = "RETENCION_CLIENTE", Descripcion = "Retencion de cliente", ConceptosSugeridos = new() { "RETENCIONES", "CLIENTES" } },
             new() { Codigo = "ANULACION_FACTURA_VENTA", Descripcion = "Anulacion de factura de venta", ConceptosSugeridos = new() { "CLIENTES", "VENTA_NETA", "IVA_DEBITO" } },
@@ -182,7 +182,8 @@ namespace BudgetControl.Api.Services.Accounting
                 TipoMovimiento = NormalizeTipoMovimiento(detalle.TipoMovimiento),
                 Concepto = NormalizeConcepto(detalle.Concepto),
                 CuentaContableId = detalle.CuentaContableId,
-                Orden = detalle.Orden > 0 ? detalle.Orden : index + 1
+                Orden = detalle.Orden > 0 ? detalle.Orden : index + 1,
+                EsObligatorio = detalle.EsObligatorio
             }).ToList();
 
             if (!normalized.Any(d => d.TipoMovimiento == "Debe"))
@@ -238,6 +239,7 @@ namespace BudgetControl.Api.Services.Accounting
                 Concepto = detalle.Concepto,
                 CuentaContableId = detalle.CuentaContableId,
                 Orden = detalle.Orden,
+                EsObligatorio = detalle.EsObligatorio,
                 Activo = true
             };
         }
@@ -286,6 +288,7 @@ namespace BudgetControl.Api.Services.Accounting
                         CuentaCodigo = d.CuentaContable.Codigo,
                         CuentaNombre = d.CuentaContable.Nombre,
                         Orden = d.Orden,
+                        EsObligatorio = d.EsObligatorio,
                         Activo = d.Activo
                     })
                     .ToList()

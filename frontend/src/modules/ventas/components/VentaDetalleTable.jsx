@@ -1,7 +1,7 @@
 const formatMoney = (value) => Number(value || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatQuantity = (value) => Number(value || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 
-const VentaDetalleTable = ({ detalles, saving, onEdit, onDelete }) => {
+const VentaDetalleTable = ({ detalles, saving, readOnly = false, onEdit, onDelete }) => {
   if (!detalles?.length) return <p className="empty-state">La factura no tiene detalles cargados.</p>;
 
   return (
@@ -20,7 +20,7 @@ const VentaDetalleTable = ({ detalles, saving, onEdit, onDelete }) => {
             <th>IVA</th>
             <th>Nomenclador</th>
             <th>Total</th>
-            <th>Acciones</th>
+            {!readOnly && <th>Acciones</th>}
           </tr>
         </thead>
         <tbody>
@@ -47,12 +47,14 @@ const VentaDetalleTable = ({ detalles, saving, onEdit, onDelete }) => {
               </td>
               <td>{detalle.nomencladorCodigo || '-'}</td>
               <td><strong>{formatMoney(detalle.totalLinea)}</strong></td>
-              <td>
-                <div className="row-actions">
-                  <button className="btn-secondary" type="button" onClick={() => onEdit(detalle)} disabled={saving}>Editar</button>
-                  <button className="btn-secondary" type="button" onClick={() => onDelete(detalle)} disabled={saving}>Eliminar</button>
-                </div>
-              </td>
+              {!readOnly && (
+                <td>
+                  <div className="row-actions">
+                    <button className="btn-secondary" type="button" onClick={() => onEdit(detalle)} disabled={saving}>Editar</button>
+                    <button className="btn-secondary" type="button" onClick={() => onDelete(detalle)} disabled={saving}>Eliminar</button>
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

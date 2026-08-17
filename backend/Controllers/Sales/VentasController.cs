@@ -549,5 +549,24 @@ namespace BudgetControl.Api.Controllers.Sales
                 return BadRequest(new { error = ex.Message });
             }
         }
+
+        [HttpGet("facturas/{facturaId}/validacion-confirmacion")]
+        public async Task<IActionResult> ValidarConfirmacionFactura(int facturaId)
+        {
+            return Ok(await _service.ValidarConfirmacionAsync(facturaId));
+        }
+
+        [HttpPost("facturas/{facturaId}/confirmar")]
+        public async Task<IActionResult> ConfirmarFactura(int facturaId)
+        {
+            try
+            {
+                return Ok(await _service.ConfirmarVentaAsync(facturaId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
     }
 }

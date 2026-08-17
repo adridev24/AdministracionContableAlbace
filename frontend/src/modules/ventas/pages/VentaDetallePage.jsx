@@ -12,6 +12,7 @@ import '../ventas.css';
 const getErrorMessage = (error) => error?.response?.data?.error || 'No se pudo completar la operacion.';
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString('es-AR') : '-');
 const formatNumber = (value, size) => String(value || 0).padStart(size, '0');
+const formatMoney = (value) => Number(value || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const VentaDetallePage = () => {
   const { ventaId } = useParams();
@@ -26,8 +27,11 @@ const VentaDetallePage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [calculatingPercepcion, setCalculatingPercepcion] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmacionValidacion, setConfirmacionValidacion] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const isConfirmed = venta?.estado === 'Confirmada';
 
   const loadData = async () => {
     setLoading(true);
@@ -158,6 +162,60 @@ const VentaDetallePage = () => {
     }
   };
 
+  const handleValidarConfirmacion = async () => {
+    setConfirming(true);
+    setMessage('');
+    setError('');
+    try {
+      const validacion = await ventasService.validarConfirmacionFactura(ventaId);
+      setConfirmacionValidacion(validacion);
+      if (!validacion.esValida) {
+        setError(validacion.errores?.[0] || 'La factura no puede confirmarse.');
+        return null;
+      }
+      return validacion;
+    } catch (validationError) {
+      setError(getErrorMessage(validationError));
+      return null;
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const handleConfirmarFactura = async () => {
+    const validacion = await handleValidarConfirmacion();
+    if (!validacion?.esValida) return;
+
+    const resumen = [
+      `Comprobante: ${venta.tipoComprobanteDescripcion}`,
+      `Numero: ${formatNumber(venta.puntoVenta, 4)}-${formatNumber(venta.numeroComprobante, 8)}`,
+      `Cliente: ${venta.clienteNombre || venta.clienteExternoId}`,
+      `Obra: ${venta.obraNombre || venta.obraExternaId}`,
+      `Total final: ${formatMoney(venta.total)}`,
+      '',
+      'Al confirmar, la factura quedara bloqueada y generara la deuda contable del cliente.',
+      'Esta accion no registra un pago.',
+    ].join('\n');
+
+    if (!window.confirm(resumen)) return;
+
+    setConfirming(true);
+    setMessage('');
+    setError('');
+    try {
+      const result = await ventasService.confirmarFactura(ventaId);
+      setVenta(result.venta);
+      setPercepcionIibb(result.venta?.percepcionesIibb?.[0] || percepcionIibb);
+      setSelectedDetalle(null);
+      setConfirmacionValidacion(null);
+      setMessage(`Factura confirmada. Asiento contable: ${result.asientoContableId}.`);
+    } catch (confirmError) {
+      setError(getErrorMessage(confirmError));
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="page-container ventas-page">
@@ -176,6 +234,11 @@ const VentaDetallePage = () => {
         <div className="page-actions">
           <Link className="btn-secondary" to="/ventas">Ventas</Link>
           <button className="btn-secondary" type="button" onClick={loadData} disabled={loading || saving}>Actualizar</button>
+          {venta && !isConfirmed && (
+            <button className="btn-primary" type="button" onClick={handleConfirmarFactura} disabled={saving || confirming || calculatingPercepcion}>
+              {confirming ? 'Confirmando...' : 'Confirmar factura'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -214,6 +277,18 @@ const VentaDetallePage = () => {
                 <span>Estado</span>
                 <strong>{venta.estado}</strong>
               </div>
+              {venta.asientoContableId && (
+                <div>
+                  <span>Asiento contable</span>
+                  <strong>{venta.asientoContableId}</strong>
+                </div>
+              )}
+              {venta.fechaConfirmacion && (
+                <div>
+                  <span>Confirmacion</span>
+                  <strong>{formatDate(venta.fechaConfirmacion)}</strong>
+                </div>
+              )}
             </div>
             <div className="tag-row">
               {venta.tipoComprobanteEsExportacion && <span className="tag">Exportacion</span>}
@@ -223,23 +298,47 @@ const VentaDetallePage = () => {
             </div>
           </SectionCard>
 
-          <SectionCard title={selectedDetalle ? 'Editar detalle' : 'Nuevo detalle'}>
-            <VentaDetalleForm
-              venta={venta}
-              itemsFacturables={itemsFacturables}
-              alicuotas={alicuotas}
-              nomencladores={nomencladores}
-              selectedDetalle={selectedDetalle}
-              saving={saving}
-              onCancel={() => setSelectedDetalle(null)}
-              onSubmit={handleSubmitDetalle}
-            />
-          </SectionCard>
+          {!isConfirmed && (
+            <SectionCard title={selectedDetalle ? 'Editar detalle' : 'Nuevo detalle'}>
+              <VentaDetalleForm
+                venta={venta}
+                itemsFacturables={itemsFacturables}
+                alicuotas={alicuotas}
+                nomencladores={nomencladores}
+                selectedDetalle={selectedDetalle}
+                saving={saving}
+                onCancel={() => setSelectedDetalle(null)}
+                onSubmit={handleSubmitDetalle}
+              />
+            </SectionCard>
+          )}
+
+          {!isConfirmed && (
+            <SectionCard title="Confirmacion definitiva">
+              <div className="summary-grid">
+                <div><span>Comprobante</span><strong>{venta.tipoComprobanteDescripcion}</strong></div>
+                <div><span>Punto de venta</span><strong>{formatNumber(venta.puntoVenta, 4)}</strong></div>
+                <div><span>Numero</span><strong>{formatNumber(venta.numeroComprobante, 8)}</strong></div>
+                <div><span>Neto</span><strong>{formatMoney((venta.totalAntesPercepciones || 0) - (venta.totalIva || 0))}</strong></div>
+                <div><span>IVA</span><strong>{formatMoney(venta.totalIva)}</strong></div>
+                <div><span>Percepcion</span><strong>{formatMoney(venta.totalPercepciones)}</strong></div>
+                <div><span>Total final</span><strong>{formatMoney(venta.total)}</strong></div>
+                <div><span>Obligaciones aplicadas</span><strong>{confirmacionValidacion?.cantidadObligacionesAplicadas ?? 0}</strong></div>
+              </div>
+              <p className="form-warning">Al confirmar, la factura quedara bloqueada y generara la deuda contable del cliente. Esta accion no registra un pago.</p>
+              {confirmacionValidacion?.errores?.length > 0 && (
+                <ul className="form-error">
+                  {confirmacionValidacion.errores.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              )}
+            </SectionCard>
+          )}
 
           <SectionCard title="Detalles">
             <VentaDetalleTable
               detalles={venta.detalles || []}
-              saving={saving}
+              saving={saving || confirming}
+              readOnly={isConfirmed}
               onEdit={setSelectedDetalle}
               onDelete={handleDeleteDetalle}
             />
@@ -251,8 +350,9 @@ const VentaDetallePage = () => {
               percepcion={percepcionIibb}
               clienteConfig={clientePercepcionConfig}
               regimenes={regimenesIibb}
-              saving={saving}
+              saving={saving || confirming}
               calculating={calculatingPercepcion}
+              readOnly={isConfirmed}
               onSaveConfig={handleSavePercepcionConfig}
               onCalcular={handleCalcularPercepcion}
             />

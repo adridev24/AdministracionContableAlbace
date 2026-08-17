@@ -43,6 +43,9 @@ namespace BudgetControl.Api.Models.Sales
 
         public DateTime? FechaModificacion { get; set; }
         public string? UsuarioModificacion { get; set; }
+        public DateTime? FechaConfirmacion { get; set; }
+        public string? UsuarioConfirmacion { get; set; }
+        public int? AsientoContableId { get; set; }
 
         public TipoComprobanteVenta TipoComprobante { get; set; } = null!;
         public PuntoVentaComprobante? PuntoVentaComprobante { get; set; }

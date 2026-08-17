@@ -41,6 +41,7 @@ namespace BudgetControl.Api.Data
         public DbSet<PercepcionIibbEntreRios> PercepcionesIibbEntreRios { get; set; } = null!;
         public DbSet<ClientePercepcionIibbConfig> ClientesPercepcionIibbConfig { get; set; } = null!;
         public DbSet<VentaPercepcionIibb> VentasPercepcionesIibb { get; set; } = null!;
+        public DbSet<VentaMovimientoCuentaCorriente> VentasMovimientosCuentaCorriente { get; set; } = null!;
         public DbSet<CategoriaItemFacturable> CategoriasItemsFacturables { get; set; } = null!;
         public DbSet<UnidadMedidaVenta> UnidadesMedidaVenta { get; set; } = null!;
         public DbSet<ItemFacturable> ItemsFacturables { get; set; } = null!;
@@ -440,6 +441,7 @@ namespace BudgetControl.Api.Data
                 entity.Property(e => e.Concepto).HasColumnName("concepto").HasMaxLength(100).IsRequired();
                 entity.Property(e => e.CuentaContableId).HasColumnName("cuenta_contable_id");
                 entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.EsObligatorio).HasColumnName("es_obligatorio");
                 entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
 
                 entity.HasIndex(e => e.ConfiguracionContableId)
@@ -586,6 +588,9 @@ namespace BudgetControl.Api.Data
                 entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
                 entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
                 entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+                entity.Property(e => e.FechaConfirmacion).HasColumnName("fecha_confirmacion");
+                entity.Property(e => e.UsuarioConfirmacion).HasColumnName("usuario_confirmacion").HasMaxLength(100);
+                entity.Property(e => e.AsientoContableId).HasColumnName("asiento_contable_id");
 
                 entity.HasIndex(e => e.FechaComprobante)
                     .HasDatabaseName("ix_ventas_fecha_comprobante");
@@ -598,6 +603,9 @@ namespace BudgetControl.Api.Data
 
                 entity.HasIndex(e => e.Estado)
                     .HasDatabaseName("ix_ventas_estado");
+
+                entity.HasIndex(e => e.AsientoContableId)
+                    .HasDatabaseName("ix_ventas_asiento_contable_id");
 
                 entity.HasIndex(e => new { e.TipoComprobanteVentaId, e.PuntoVenta, e.NumeroComprobante })
                     .HasDatabaseName("ix_ventas_numeracion")
@@ -615,6 +623,33 @@ namespace BudgetControl.Api.Data
                     .WithMany(r => r.Ventas)
                     .HasForeignKey(e => e.PuntoVentaComprobanteId)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<VentaMovimientoCuentaCorriente>(entity =>
+            {
+                entity.ToTable("ventas_movimientos_cuenta_corriente");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.ClienteExternoId).HasColumnName("cliente_externo_id").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.ObraExternaId).HasColumnName("obra_externa_id").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Fecha).HasColumnName("fecha");
+                entity.Property(e => e.TipoMovimiento).HasColumnName("tipo_movimiento").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Debe).HasColumnName("debe").HasPrecision(18, 2);
+                entity.Property(e => e.Haber).HasColumnName("haber").HasPrecision(18, 2);
+                entity.Property(e => e.ModuloOrigen).HasColumnName("modulo_origen").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.IdOrigen).HasColumnName("id_origen").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(500);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+
+                entity.HasIndex(e => e.ClienteExternoId)
+                    .HasDatabaseName("ix_ventas_mov_cc_cliente");
+
+                entity.HasIndex(e => e.ObraExternaId)
+                    .HasDatabaseName("ix_ventas_mov_cc_obra");
+
+                entity.HasIndex(e => new { e.ModuloOrigen, e.IdOrigen, e.TipoMovimiento })
+                    .HasDatabaseName("ix_ventas_mov_cc_origen_tipo")
+                    .IsUnique();
             });
 
             modelBuilder.Entity<ClientePercepcionIibbConfig>(entity =>

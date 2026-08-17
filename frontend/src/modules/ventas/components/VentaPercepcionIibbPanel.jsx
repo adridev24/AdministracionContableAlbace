@@ -22,6 +22,7 @@ const VentaPercepcionIibbPanel = ({
   regimenes,
   saving,
   calculating,
+  readOnly = false,
   onSaveConfig,
   onCalcular,
 }) => {
@@ -77,7 +78,7 @@ const VentaPercepcionIibbPanel = ({
         <div className="form-grid">
           <div className="form-field">
             <label>Situacion del cliente</label>
-            <select name="situacion" value={form.situacion} onChange={handleChange}>
+            <select name="situacion" value={form.situacion} onChange={handleChange} disabled={readOnly}>
               <option value="Pendiente">Pendiente</option>
               <option value="NoAlcanzado">No alcanzado</option>
               <option value="Alcanzado">Alcanzado</option>
@@ -86,7 +87,7 @@ const VentaPercepcionIibbPanel = ({
           </div>
           <div className="form-field">
             <label>Regimen</label>
-            <select name="regimenPercepcionIibbId" value={form.regimenPercepcionIibbId} onChange={handleChange} disabled={form.situacion !== 'Alcanzado'}>
+            <select name="regimenPercepcionIibbId" value={form.regimenPercepcionIibbId} onChange={handleChange} disabled={readOnly || form.situacion !== 'Alcanzado'}>
               <option value="">Seleccionar</option>
               {(regimenes || []).map((regimen) => (
                 <option key={regimen.id} value={regimen.id}>{regimen.codigo} - {regimen.descripcion}</option>
@@ -95,36 +96,36 @@ const VentaPercepcionIibbPanel = ({
           </div>
           <div className="form-field">
             <label>Inscripcion IIBB</label>
-            <input name="numeroInscripcionIibb" value={form.numeroInscripcionIibb} onChange={handleChange} />
+            <input name="numeroInscripcionIibb" value={form.numeroInscripcionIibb} onChange={handleChange} disabled={readOnly} />
           </div>
           <div className="form-field">
             <label>Jurisdiccion</label>
-            <input name="jurisdiccionIibb" value={form.jurisdiccionIibb} onChange={handleChange} />
+            <input name="jurisdiccionIibb" value={form.jurisdiccionIibb} onChange={handleChange} disabled={readOnly} />
           </div>
           {form.situacion === 'Excluido' && (
             <>
               <div className="form-field">
                 <label>Exclusion desde</label>
-                <input name="exclusionDesde" type="date" value={form.exclusionDesde} onChange={handleChange} />
+                <input name="exclusionDesde" type="date" value={form.exclusionDesde} onChange={handleChange} disabled={readOnly} />
               </div>
               <div className="form-field">
                 <label>Exclusion hasta</label>
-                <input name="exclusionHasta" type="date" value={form.exclusionHasta} onChange={handleChange} />
+                <input name="exclusionHasta" type="date" value={form.exclusionHasta} onChange={handleChange} disabled={readOnly} />
               </div>
               <div className="form-field full-width">
                 <label>Motivo exclusion</label>
-                <input name="motivoExclusion" value={form.motivoExclusion} onChange={handleChange} />
+                <input name="motivoExclusion" value={form.motivoExclusion} onChange={handleChange} disabled={readOnly} />
               </div>
             </>
           )}
           <div className="form-field full-width">
             <label>Observaciones tributarias</label>
-            <textarea name="observaciones" rows="2" value={form.observaciones} onChange={handleChange} />
+            <textarea name="observaciones" rows="2" value={form.observaciones} onChange={handleChange} disabled={readOnly} />
           </div>
         </div>
         <div className="form-actions">
-          <button className="btn-secondary" type="submit" disabled={saving}>Guardar configuracion</button>
-          <button className="btn-primary" type="button" onClick={onCalcular} disabled={saving || calculating}>
+          <button className="btn-secondary" type="submit" disabled={saving || readOnly}>Guardar configuracion</button>
+          <button className="btn-primary" type="button" onClick={onCalcular} disabled={saving || calculating || readOnly}>
             {calculating ? 'Calculando...' : percepcion ? 'Recalcular percepcion' : 'Calcular percepcion'}
           </button>
         </div>

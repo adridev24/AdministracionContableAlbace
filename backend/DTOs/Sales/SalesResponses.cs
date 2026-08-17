@@ -101,8 +101,34 @@ namespace BudgetControl.Api.DTOs.Sales
         public string UsuarioAlta { get; set; } = null!;
         public DateTime? FechaModificacion { get; set; }
         public string? UsuarioModificacion { get; set; }
+        public DateTime? FechaConfirmacion { get; set; }
+        public string? UsuarioConfirmacion { get; set; }
+        public int? AsientoContableId { get; set; }
         public List<VentaDetalleResponse> Detalles { get; set; } = new();
         public List<VentaPercepcionIibbResponse> PercepcionesIibb { get; set; } = new();
+    }
+
+    public class VentaConfirmacionValidacionResponse
+    {
+        public bool EsValida { get; set; }
+        public List<string> Errores { get; set; } = new();
+        public List<string> Advertencias { get; set; } = new();
+        public decimal TotalFinal { get; set; }
+        public decimal ImporteAsociadoPlan { get; set; }
+        public int CantidadObligacionesAplicadas { get; set; }
+        public string CodigoOperacionContable { get; set; } = string.Empty;
+        public List<string> ConceptosContables { get; set; } = new();
+    }
+
+    public class VentaConfirmacionResponse
+    {
+        public VentaResponse Venta { get; set; } = null!;
+        public int AsientoContableId { get; set; }
+        public bool AsientoYaExistia { get; set; }
+        public decimal TotalFinal { get; set; }
+        public decimal ImporteAsociadoPlan { get; set; }
+        public int CantidadObligacionesAplicadas { get; set; }
+        public string CodigoOperacionContable { get; set; } = string.Empty;
     }
 
     public class VentaListResponse

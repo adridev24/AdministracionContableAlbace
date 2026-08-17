@@ -8,6 +8,7 @@ namespace BudgetControl.Api.Models.Accounting
         public string Concepto { get; set; } = string.Empty;
         public int CuentaContableId { get; set; }
         public int Orden { get; set; }
+        public bool EsObligatorio { get; set; } = true;
         public bool Activo { get; set; } = true;
 
         public ConfiguracionContable ConfiguracionContable { get; set; } = null!;

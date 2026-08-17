@@ -48,5 +48,7 @@ namespace BudgetControl.Api.Services.Sales
         Task<VentaDetalleMutationResponse> CreateDetalleAsync(int ventaId, VentaDetalleRequest request);
         Task<VentaDetalleMutationResponse> UpdateDetalleAsync(int ventaId, int detalleId, VentaDetalleRequest request);
         Task<VentaResponse> DeleteDetalleAsync(int ventaId, int detalleId);
+        Task<VentaConfirmacionValidacionResponse> ValidarConfirmacionAsync(int ventaId);
+        Task<VentaConfirmacionResponse> ConfirmarVentaAsync(int ventaId);
     }
 }

@@ -63,6 +63,7 @@ namespace BudgetControl.Api.Services.Accounting
 
             var detalles = configuracion.Detalles
                 .OrderBy(d => d.Orden)
+                .Where(detalle => importes.TryGetValue(detalle.Concepto, out var importe) && importe > 0)
                 .Select(detalle =>
                 {
                     var importe = importes[detalle.Concepto];
@@ -138,16 +139,25 @@ namespace BudgetControl.Api.Services.Accounting
             {
                 if (!importes.TryGetValue(detalle.Concepto, out var importe) || importe <= 0)
                 {
-                    throw new InvalidOperationException($"Debe informar un importe mayor a cero para el concepto {detalle.Concepto}.");
+                    if (detalle.EsObligatorio)
+                    {
+                        throw new InvalidOperationException($"Debe informar un importe mayor a cero para el concepto {detalle.Concepto}.");
+                    }
+
+                    continue;
                 }
             }
 
-            if (!configuracion.Detalles.Any(d => d.TipoMovimiento == "Debe"))
+            var detallesAplicables = configuracion.Detalles
+                .Where(d => importes.TryGetValue(d.Concepto, out var importe) && importe > 0)
+                .ToList();
+
+            if (!detallesAplicables.Any(d => d.TipoMovimiento == "Debe"))
             {
                 throw new InvalidOperationException("La configuracion contable debe tener al menos un movimiento Debe.");
             }
 
-            if (!configuracion.Detalles.Any(d => d.TipoMovimiento == "Haber"))
+            if (!detallesAplicables.Any(d => d.TipoMovimiento == "Haber"))
             {
                 throw new InvalidOperationException("La configuracion contable debe tener al menos un movimiento Haber.");
             }

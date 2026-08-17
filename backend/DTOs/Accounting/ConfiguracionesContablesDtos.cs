@@ -20,6 +20,7 @@ namespace BudgetControl.Api.DTOs.Accounting
         public string Concepto { get; set; } = string.Empty;
         public int CuentaContableId { get; set; }
         public int Orden { get; set; }
+        public bool EsObligatorio { get; set; } = true;
     }
 
     public class ConfiguracionContableListResponse
@@ -47,6 +48,7 @@ namespace BudgetControl.Api.DTOs.Accounting
         public string CuentaCodigo { get; set; } = string.Empty;
         public string CuentaNombre { get; set; } = string.Empty;
         public int Orden { get; set; }
+        public bool EsObligatorio { get; set; }
         public bool Activo { get; set; }
     }
 

@@ -1,7 +1,9 @@
 using BudgetControl.Api.Data;
+using BudgetControl.Api.DTOs.Accounting;
 using BudgetControl.Api.DTOs.Sales;
 using BudgetControl.Api.Models;
 using BudgetControl.Api.Models.Sales;
+using BudgetControl.Api.Services.Accounting;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
@@ -11,18 +13,31 @@ namespace BudgetControl.Api.Services.Sales
     {
         private const string MonedaBase = "ARS";
         private const int MaxPageSize = 100;
+        private const string CodigoOperacionFacturaVenta = "FACTURA_VENTA";
+        private const string ModuloOrigenVentas = "VENTAS";
+        private const string TipoMovimientoCuentaFactura = "FACTURA";
 
         private readonly AppDbContext _db;
         private readonly IExternalDataService _externalDataService;
         private readonly IUserContext _userContext;
         private readonly ICalculadorVentasService _calculador;
+        private readonly IContabilizacionAutomaticaService _contabilizacionAutomatica;
+        private readonly IConfiguracionesContablesService _configuracionesContables;
 
-        public VentasService(AppDbContext db, IExternalDataService externalDataService, IUserContext userContext, ICalculadorVentasService calculador)
+        public VentasService(
+            AppDbContext db,
+            IExternalDataService externalDataService,
+            IUserContext userContext,
+            ICalculadorVentasService calculador,
+            IContabilizacionAutomaticaService contabilizacionAutomatica,
+            IConfiguracionesContablesService configuracionesContables)
         {
             _db = db;
             _externalDataService = externalDataService;
             _userContext = userContext;
             _calculador = calculador;
+            _contabilizacionAutomatica = contabilizacionAutomatica;
+            _configuracionesContables = configuracionesContables;
         }
 
         public async Task<IEnumerable<TipoComprobanteVentaResponse>> GetTiposComprobanteAsync(bool soloActivos = false)
@@ -859,6 +874,343 @@ namespace BudgetControl.Api.Services.Sales
             await transaction.CommitAsync();
 
             return await BuildVentaResponseAsync(venta);
+        }
+
+        public async Task<VentaConfirmacionValidacionResponse> ValidarConfirmacionAsync(int ventaId)
+        {
+            var venta = await GetVentaQuery(false).FirstOrDefaultAsync(v => v.Id == ventaId);
+            if (venta == null)
+            {
+                return BuildValidationResult(null, new List<string> { "Venta no encontrada." }, new List<string>());
+            }
+
+            return await ValidateConfirmacionAsync(venta);
+        }
+
+        public async Task<VentaConfirmacionResponse> ConfirmarVentaAsync(int ventaId)
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            var venta = await GetVentaQuery(false).FirstOrDefaultAsync(v => v.Id == ventaId);
+            if (venta == null) throw new InvalidOperationException("Venta no encontrada.");
+            if (venta.Estado == VentaEstado.Confirmada) throw new InvalidOperationException("La factura ya fue confirmada.");
+            if (venta.Estado != VentaEstado.Borrador) throw new InvalidOperationException("Solo una factura Borrador puede confirmarse.");
+
+            var validacion = await ValidateConfirmacionAsync(venta);
+            if (!validacion.EsValida)
+            {
+                throw new InvalidOperationException(validacion.Errores.First());
+            }
+
+            _calculador.RecalcularTotales(venta);
+            var solicitud = BuildSolicitudContable(venta);
+            await EnsureMovimientoCuentaCorrienteAsync(venta);
+
+            var asiento = await _contabilizacionAutomatica.GenerarAsientoAutomaticoAsync(solicitud);
+            var now = DateTime.UtcNow;
+            venta.Estado = VentaEstado.Confirmada;
+            venta.FechaConfirmacion = now;
+            venta.UsuarioConfirmacion = _userContext.UserName;
+            venta.AsientoContableId = asiento.AsientoContableId;
+            venta.FechaModificacion = now;
+            venta.UsuarioModificacion = _userContext.UserName;
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return new VentaConfirmacionResponse
+            {
+                Venta = await BuildVentaResponseAsync(venta),
+                AsientoContableId = asiento.AsientoContableId,
+                AsientoYaExistia = asiento.YaExistia,
+                TotalFinal = venta.Total,
+                ImporteAsociadoPlan = GetImporteAsociadoPlan(venta),
+                CantidadObligacionesAplicadas = 0,
+                CodigoOperacionContable = CodigoOperacionFacturaVenta
+            };
+        }
+
+        private async Task<VentaConfirmacionValidacionResponse> ValidateConfirmacionAsync(Venta venta)
+        {
+            var errores = new List<string>();
+            var advertencias = new List<string>();
+
+            if (venta.Estado == VentaEstado.Confirmada)
+            {
+                errores.Add("La factura ya fue confirmada.");
+            }
+            else if (venta.Estado != VentaEstado.Borrador)
+            {
+                errores.Add("Solo una factura Borrador puede confirmarse.");
+            }
+
+            try
+            {
+                await ValidateRequestAsync(new VentaHeaderRequest
+                {
+                    TipoComprobanteVentaId = venta.TipoComprobanteVentaId,
+                    PuntoVentaComprobanteId = venta.PuntoVentaComprobanteId,
+                    ClienteExternoId = venta.ClienteExternoId,
+                    ObraExternaId = venta.ObraExternaId,
+                    FechaComprobante = venta.FechaComprobante,
+                    PuntoVenta = venta.PuntoVenta,
+                    NumeroComprobante = venta.NumeroComprobante,
+                    MonedaCodigo = venta.MonedaCodigo,
+                    Cotizacion = venta.Cotizacion,
+                    Observaciones = venta.Observaciones
+                }, venta.Id);
+            }
+            catch (InvalidOperationException ex)
+            {
+                errores.Add(ex.Message);
+            }
+
+            if (venta.Detalles == null || !venta.Detalles.Any())
+            {
+                errores.Add("La factura no posee detalles.");
+            }
+            else
+            {
+                await ValidateDetallesConfirmacionAsync(venta, errores);
+            }
+
+            ValidateTotalesConfirmacion(venta, errores);
+            ValidatePercepcionConfirmacion(venta, errores, advertencias);
+            await ValidateConfiguracionContableConfirmacionAsync(venta, errores);
+
+            return BuildValidationResult(venta, errores, advertencias);
+        }
+
+        private async Task ValidateDetallesConfirmacionAsync(Venta venta, ICollection<string> errores)
+        {
+            var itemIds = venta.Detalles
+                .Where(d => d.ItemFacturableId.HasValue)
+                .Select(d => d.ItemFacturableId!.Value)
+                .Distinct()
+                .ToList();
+
+            var items = await GetItemsFacturablesQuery()
+                .Where(i => itemIds.Contains(i.Id))
+                .ToDictionaryAsync(i => i.Id);
+
+            foreach (var detalle in venta.Detalles.OrderBy(d => d.NumeroLinea))
+            {
+                var linea = $"Linea {detalle.NumeroLinea}:";
+                if (!detalle.ItemFacturableId.HasValue)
+                {
+                    errores.Add($"{linea} debe tener item facturable.");
+                }
+                else if (!items.TryGetValue(detalle.ItemFacturableId.Value, out var item))
+                {
+                    errores.Add($"{linea} el item facturable no existe.");
+                }
+                else
+                {
+                    if (!item.Activo) errores.Add($"{linea} el item facturable se encuentra inactivo.");
+                    if (!item.UnidadMedida.Activo) errores.Add($"{linea} la unidad de medida del item se encuentra inactiva.");
+                }
+
+                if (detalle.Cantidad <= 0) errores.Add($"{linea} la cantidad debe ser mayor que cero.");
+                if (detalle.PrecioUnitario < 0) errores.Add($"{linea} el precio unitario no puede ser negativo.");
+                if (detalle.PorcentajeDescuento < 0 || detalle.PorcentajeDescuento > 100) errores.Add($"{linea} el descuento debe estar entre 0 y 100.");
+                if (venta.TipoComprobante.RequiereNomenclador && !detalle.NomencladorId.HasValue) errores.Add($"{linea} el comprobante requiere nomenclador.");
+                if (venta.TipoComprobante.EsExportacion && detalle.TipoTratamientoIva == TipoTratamientoIvaVenta.Gravado)
+                {
+                    errores.Add($"{linea} un comprobante de exportacion no permite tratamiento de IVA gravado local.");
+                }
+            }
+        }
+
+        private void ValidateTotalesConfirmacion(Venta venta, ICollection<string> errores)
+        {
+            var subtotalBruto = venta.SubtotalBruto;
+            var totalDescuentos = venta.TotalDescuentos;
+            var netoGravado = venta.NetoGravado;
+            var totalExento = venta.TotalExento;
+            var totalNoGravado = venta.TotalNoGravado;
+            var totalIva = venta.TotalIva;
+            var totalAntesPercepciones = venta.TotalAntesPercepciones;
+            var total = venta.Total;
+
+            _calculador.RecalcularTotales(venta);
+
+            if (subtotalBruto != venta.SubtotalBruto ||
+                totalDescuentos != venta.TotalDescuentos ||
+                netoGravado != venta.NetoGravado ||
+                totalExento != venta.TotalExento ||
+                totalNoGravado != venta.TotalNoGravado ||
+                totalIva != venta.TotalIva ||
+                totalAntesPercepciones != venta.TotalAntesPercepciones ||
+                total != venta.Total)
+            {
+                errores.Add("Los totales de la factura no coinciden con el recalculo actual.");
+            }
+        }
+
+        private static void ValidatePercepcionConfirmacion(Venta venta, ICollection<string> errores, ICollection<string> advertencias)
+        {
+            if (venta.PercepcionIibbRequiereRecalculo)
+            {
+                errores.Add("La percepcion de Ingresos Brutos requiere recalculo.");
+            }
+
+            var percepcionesActivas = venta.PercepcionesIibb?.Where(p => p.Activa).ToList() ?? new List<VentaPercepcionIibb>();
+            var totalPercepciones = RoundMoney(percepcionesActivas.Sum(p => p.Importe));
+            if (venta.TotalPercepciones > 0 && !percepcionesActivas.Any())
+            {
+                errores.Add("La percepcion de Ingresos Brutos no se encuentra calculada.");
+            }
+
+            if (venta.TotalPercepciones != totalPercepciones)
+            {
+                errores.Add("La percepcion de Ingresos Brutos no coincide con los totales actuales.");
+            }
+
+            if (venta.TotalPercepciones <= 0)
+            {
+                var motivo = percepcionesActivas.FirstOrDefault()?.Motivo;
+                advertencias.Add(string.IsNullOrWhiteSpace(motivo)
+                    ? "La factura no posee percepcion de Ingresos Brutos aplicada."
+                    : $"La factura no posee percepcion aplicada: {motivo}");
+            }
+        }
+
+        private async Task ValidateConfiguracionContableConfirmacionAsync(Venta venta, ICollection<string> errores)
+        {
+            var configuracion = await _configuracionesContables.GetConfiguracionPorOperacionAsync(CodigoOperacionFacturaVenta);
+            if (configuracion == null || !configuracion.Activa)
+            {
+                errores.Add("La configuracion contable para la operacion FACTURA_VENTA no existe o esta inactiva.");
+                return;
+            }
+
+            var conceptos = configuracion.Detalles.Select(d => d.Concepto).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var conceptosObligatorios = configuracion.Detalles
+                .Where(d => d.EsObligatorio)
+                .Select(d => d.Concepto)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var requerido in new[] { "CLIENTES", "VENTA_NETA" })
+            {
+                if (!conceptos.Contains(requerido))
+                {
+                    errores.Add($"La configuracion contable FACTURA_VENTA no posee el concepto {requerido}.");
+                }
+            }
+
+            if (venta.TotalIva > 0 && !conceptos.Contains("IVA_DEBITO"))
+            {
+                errores.Add("La configuracion contable FACTURA_VENTA no posee el concepto IVA_DEBITO requerido por el IVA de la factura.");
+            }
+
+            if (venta.TotalIva <= 0 && conceptosObligatorios.Contains("IVA_DEBITO"))
+            {
+                errores.Add("La configuracion contable FACTURA_VENTA exige IVA_DEBITO, pero la factura no posee IVA.");
+            }
+
+            if (venta.TotalPercepciones > 0 && !conceptos.Contains("PERCEPCION_IIBB"))
+            {
+                errores.Add("La configuracion contable FACTURA_VENTA no posee el concepto PERCEPCION_IIBB requerido por la percepcion aplicada.");
+            }
+
+            if (venta.TotalPercepciones <= 0 && conceptosObligatorios.Contains("PERCEPCION_IIBB"))
+            {
+                errores.Add("La configuracion contable FACTURA_VENTA exige PERCEPCION_IIBB, pero la factura no posee percepcion aplicada.");
+            }
+        }
+
+        private async Task EnsureMovimientoCuentaCorrienteAsync(Venta venta)
+        {
+            var idOrigen = venta.Id.ToString();
+            var exists = await _db.VentasMovimientosCuentaCorriente.AnyAsync(m =>
+                m.ModuloOrigen == ModuloOrigenVentas &&
+                m.IdOrigen == idOrigen &&
+                m.TipoMovimiento == TipoMovimientoCuentaFactura);
+
+            if (exists) return;
+
+            _db.VentasMovimientosCuentaCorriente.Add(new VentaMovimientoCuentaCorriente
+            {
+                ClienteExternoId = venta.ClienteExternoId,
+                ObraExternaId = venta.ObraExternaId,
+                Fecha = venta.FechaComprobante,
+                TipoMovimiento = TipoMovimientoCuentaFactura,
+                Debe = venta.Total,
+                Haber = 0,
+                ModuloOrigen = ModuloOrigenVentas,
+                IdOrigen = idOrigen,
+                Descripcion = $"Factura {venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}",
+                FechaAlta = DateTime.UtcNow,
+                UsuarioAlta = _userContext.UserName
+            });
+        }
+
+        private static SolicitudContabilizacionAutomaticaRequest BuildSolicitudContable(Venta venta)
+        {
+            var importes = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CLIENTES"] = venta.Total,
+                ["VENTA_NETA"] = GetImporteAsociadoPlan(venta)
+            };
+
+            if (venta.TotalIva > 0)
+            {
+                importes["IVA_DEBITO"] = venta.TotalIva;
+            }
+
+            if (venta.TotalPercepciones > 0)
+            {
+                importes["PERCEPCION_IIBB"] = venta.TotalPercepciones;
+            }
+
+            return new SolicitudContabilizacionAutomaticaRequest
+            {
+                CodigoOperacion = CodigoOperacionFacturaVenta,
+                ModuloOrigen = ModuloOrigenVentas,
+                IdOrigen = venta.Id.ToString(),
+                Fecha = venta.FechaComprobante,
+                Descripcion = $"Factura de venta {venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}",
+                ImportesPorConcepto = importes
+            };
+        }
+
+        private static VentaConfirmacionValidacionResponse BuildValidationResult(Venta? venta, List<string> errores, List<string> advertencias)
+        {
+            return new VentaConfirmacionValidacionResponse
+            {
+                EsValida = errores.Count == 0,
+                Errores = errores.Distinct().ToList(),
+                Advertencias = advertencias.Distinct().ToList(),
+                TotalFinal = venta?.Total ?? 0,
+                ImporteAsociadoPlan = venta == null ? 0 : GetImporteAsociadoPlan(venta),
+                CantidadObligacionesAplicadas = 0,
+                CodigoOperacionContable = CodigoOperacionFacturaVenta,
+                ConceptosContables = BuildSolicitudConceptos(venta)
+            };
+        }
+
+        private static List<string> BuildSolicitudConceptos(Venta? venta)
+        {
+            var conceptos = new List<string> { "CLIENTES", "VENTA_NETA" };
+            if ((venta?.TotalIva ?? 0) > 0)
+            {
+                conceptos.Add("IVA_DEBITO");
+            }
+
+            if ((venta?.TotalPercepciones ?? 0) > 0)
+            {
+                conceptos.Add("PERCEPCION_IIBB");
+            }
+
+            return conceptos;
+        }
+
+        private static decimal GetImporteAsociadoPlan(Venta venta)
+        {
+            return RoundMoney(venta.TotalAntesPercepciones - venta.TotalIva);
+        }
+
+        private static decimal RoundMoney(decimal value)
+        {
+            return Math.Round(value, 2, MidpointRounding.AwayFromZero);
         }
 
         private IQueryable<Venta> GetVentaQuery(bool asNoTracking = true)

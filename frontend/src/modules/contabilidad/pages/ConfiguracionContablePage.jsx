@@ -6,7 +6,17 @@ import cuentasContablesService from '../services/cuentasContablesService';
 import configuracionesContablesService from '../services/configuracionesContablesService';
 import '../contabilidad.css';
 
-const emptyDetalle = () => ({ tipoMovimiento: 'Debe', concepto: '', cuentaContableId: '', orden: 1 });
+const emptyDetalle = () => ({ tipoMovimiento: 'Debe', concepto: '', cuentaContableId: '', esObligatorio: true, orden: 1 });
+const conceptoDescriptions = {
+  CLIENTES: 'Deudores por ventas / Total del cliente',
+  VENTA_NETA: 'Neto de la venta',
+  IVA_DEBITO: 'IVA Debito Fiscal',
+  PERCEPCION_IIBB: 'Percepcion de Ingresos Brutos',
+  CAJA: 'Caja',
+  BANCO: 'Banco',
+  RETENCIONES: 'Retenciones',
+};
+
 const emptyForm = () => ({
   codigoOperacion: '',
   descripcion: '',
@@ -38,6 +48,29 @@ const ConfiguracionContablePage = () => {
   const [readOnly, setReadOnly] = useState(false);
   const [editingConfig, setEditingConfig] = useState(null);
   const [form, setForm] = useState(emptyForm);
+
+  const selectedTipoOperacion = useMemo(
+    () => tiposOperacion.find((tipo) => tipo.codigo === form.codigoOperacion.trim().toUpperCase()),
+    [tiposOperacion, form.codigoOperacion],
+  );
+
+  const conceptosDisponibles = useMemo(() => {
+    const conceptosOperacion = selectedTipoOperacion?.conceptosSugeridos || [];
+    const conceptosExistentes = form.detalles
+      .map((detalle) => detalle.concepto?.trim().toUpperCase())
+      .filter(Boolean);
+    const fallbackConceptos = tiposOperacion.flatMap((tipo) => tipo.conceptosSugeridos || []);
+    const source = conceptosOperacion.length ? conceptosOperacion : fallbackConceptos;
+    return [...new Set([...source, ...conceptosExistentes])]
+      .filter(Boolean)
+      .sort();
+  }, [form.detalles, selectedTipoOperacion, tiposOperacion]);
+
+  const formatConcepto = (concepto) => {
+    const codigo = concepto?.trim().toUpperCase() || '';
+    const descripcion = conceptoDescriptions[codigo];
+    return descripcion ? `${codigo} - ${descripcion}` : codigo;
+  };
 
   const buildQuery = () => ({
     codigoOperacion: filters.codigoOperacion.trim() || undefined,
@@ -161,6 +194,7 @@ const ConfiguracionContablePage = () => {
           tipoMovimiento: item.tipoMovimiento,
           concepto: item.concepto,
           cuentaContableId: String(item.cuentaContableId),
+          esObligatorio: item.esObligatorio ?? true,
           orden: item.orden,
         })),
       });
@@ -194,6 +228,7 @@ const ConfiguracionContablePage = () => {
         tipoMovimiento: detalle.tipoMovimiento,
         concepto: detalle.concepto,
         cuentaContableId: Number(detalle.cuentaContableId),
+        esObligatorio: detalle.esObligatorio,
         orden: Number(detalle.orden) || index + 1,
       })),
     };
@@ -240,6 +275,7 @@ const ConfiguracionContablePage = () => {
           tipoMovimiento: item.tipoMovimiento,
           concepto: item.concepto,
           cuentaContableId: item.cuentaContableId,
+          esObligatorio: item.esObligatorio ?? true,
           orden: item.orden,
         })),
       });
@@ -382,9 +418,10 @@ const ConfiguracionContablePage = () => {
                 <table className="data-table asiento-edit-table">
                   <thead>
                     <tr>
-                      <th>Tipo</th>
                       <th>Concepto</th>
+                      <th>Movimiento</th>
                       <th>Cuenta contable</th>
+                      <th>Obligatorio</th>
                       <th>Orden</th>
                       {!readOnly && <th>Accion</th>}
                     </tr>
@@ -393,13 +430,19 @@ const ConfiguracionContablePage = () => {
                     {form.detalles.map((detalle, index) => (
                       <tr key={index}>
                         <td>
+                          <select value={detalle.concepto} onChange={(event) => handleDetalleChange(index, 'concepto', event.target.value)} disabled={readOnly}>
+                            <option value="">Seleccionar</option>
+                            {conceptosDisponibles.map((concepto) => (
+                              <option key={concepto} value={concepto}>{formatConcepto(concepto)}</option>
+                            ))}
+                          </select>
+                          {detalle.concepto && <span className="table-subtext">{formatConcepto(detalle.concepto)}</span>}
+                        </td>
+                        <td>
                           <select value={detalle.tipoMovimiento} onChange={(event) => handleDetalleChange(index, 'tipoMovimiento', event.target.value)} disabled={readOnly}>
                             <option value="Debe">Debe</option>
                             <option value="Haber">Haber</option>
                           </select>
-                        </td>
-                        <td>
-                          <input value={detalle.concepto} onChange={(event) => handleDetalleChange(index, 'concepto', event.target.value)} disabled={readOnly} />
                         </td>
                         <td>
                           <select value={detalle.cuentaContableId} onChange={(event) => handleDetalleChange(index, 'cuentaContableId', event.target.value)} disabled={readOnly}>
@@ -408,6 +451,17 @@ const ConfiguracionContablePage = () => {
                               <option key={cuenta.id} value={cuenta.id}>{cuenta.codigo} - {cuenta.nombre}</option>
                             ))}
                           </select>
+                        </td>
+                        <td>
+                          <label className="checkbox-inline">
+                            <input
+                              type="checkbox"
+                              checked={detalle.esObligatorio}
+                              onChange={(event) => handleDetalleChange(index, 'esObligatorio', event.target.checked)}
+                              disabled={readOnly}
+                            />
+                            {detalle.esObligatorio ? 'Si' : 'No'}
+                          </label>
                         </td>
                         <td>
                           <input type="number" min="1" step="1" value={detalle.orden} onChange={(event) => handleDetalleChange(index, 'orden', event.target.value)} disabled={readOnly} />
