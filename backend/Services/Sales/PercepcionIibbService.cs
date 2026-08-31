@@ -108,10 +108,10 @@ namespace BudgetControl.Api.Services.Sales
             if (venta.Estado != VentaEstado.Borrador) throw new InvalidOperationException("Solo una venta en estado Borrador permite recalcular percepciones.");
 
             var config = await GetClienteConfigQuery().FirstOrDefaultAsync(c => c.ClienteExternoId == venta.ClienteExternoId);
+            _calculador.RecalcularTotales(venta);
             var result = await DeterminarAsync(venta, config);
             var percepcion = await UpsertPercepcionAsync(venta, result);
 
-            venta.TotalPercepciones = result.Resultado == ResultadoPercepcionIibb.Aplicada ? result.Importe : 0m;
             venta.PercepcionIibbRequiereRecalculo = false;
             venta.FechaUltimoCalculoPercepcion = DateTime.UtcNow;
             venta.FechaModificacion = DateTime.UtcNow;

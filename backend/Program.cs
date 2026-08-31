@@ -9,6 +9,7 @@ using System.Text.Json.Serialization;
 using BudgetControl.Api.Data;
 using BudgetControl.Api.Services;
 using BudgetControl.Api.Services.Accounting;
+using BudgetControl.Api.Services.Collections;
 using BudgetControl.Api.Services.Commercial;
 using BudgetControl.Api.Services.Sales;
 
@@ -85,6 +86,7 @@ builder.Services.AddScoped<ICuentasContablesService, CuentasContablesService>();
 builder.Services.AddScoped<IAsientosContablesService, AsientosContablesService>();
 builder.Services.AddScoped<IConfiguracionesContablesService, ConfiguracionesContablesService>();
 builder.Services.AddScoped<IContabilizacionAutomaticaService, ContabilizacionAutomaticaService>();
+builder.Services.AddScoped<ICobranzasService, CobranzasService>();
 builder.Services.AddScoped<IExternalDataService, ExternalDataService>();
 builder.Services.AddScoped<ICalculadorVentasService, CalculadorVentasService>();
 builder.Services.AddScoped<IPercepcionIibbService, PercepcionIibbService>();

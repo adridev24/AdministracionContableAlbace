@@ -135,6 +135,10 @@ const VentasHomePage = () => {
             <strong>Parametrizacion</strong>
             <span>Comprobantes, puntos de venta y parametros tributarios.</span>
           </Link>
+          <Link className="module-menu-item" to="/ventas/cobranzas">
+            <strong>Cobranzas</strong>
+            <span>Cancelacion efectiva de facturas confirmadas de Via 1.</span>
+          </Link>
         </div>
       </SectionCard>
 

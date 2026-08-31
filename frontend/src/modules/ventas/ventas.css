@@ -266,6 +266,18 @@
   padding-top: 12px;
 }
 
+.inline-entry {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(120px, 1fr) auto auto;
+  min-width: 310px;
+}
+
+.inline-entry input {
+  min-width: 0;
+}
+
 @media (max-width: 780px) {
   .ventas-page .section-card-actions {
     justify-content: flex-start;

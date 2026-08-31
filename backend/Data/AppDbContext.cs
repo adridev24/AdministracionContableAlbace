@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using BudgetControl.Api.Models;
 using BudgetControl.Api.Models.Accounting;
+using BudgetControl.Api.Models.Collections;
 using BudgetControl.Api.Models.Commercial;
 using BudgetControl.Api.Models.Sales;
 
@@ -45,6 +46,12 @@ namespace BudgetControl.Api.Data
         public DbSet<CategoriaItemFacturable> CategoriasItemsFacturables { get; set; } = null!;
         public DbSet<UnidadMedidaVenta> UnidadesMedidaVenta { get; set; } = null!;
         public DbSet<ItemFacturable> ItemsFacturables { get; set; } = null!;
+        public DbSet<Cobranza> Cobranzas { get; set; } = null!;
+        public DbSet<MedioPagoCobranza> MediosPagoCobranza { get; set; } = null!;
+        public DbSet<BancoCobranza> BancosCobranza { get; set; } = null!;
+        public DbSet<CobranzaMedioPago> CobranzasMediosPago { get; set; } = null!;
+        public DbSet<CobranzaAplicacionFactura> CobranzasAplicacionesFactura { get; set; } = null!;
+        public DbSet<CobranzaAplicacionObligacion> CobranzasAplicacionesObligacion { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -1024,6 +1031,208 @@ namespace BudgetControl.Api.Data
                     .HasForeignKey(e => e.NomencladorPredeterminadoId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
+
+            modelBuilder.Entity<Cobranza>(entity =>
+            {
+                entity.ToTable("cobranzas");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.ClienteExternoId).HasColumnName("cliente_externo_id").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Fecha).HasColumnName("fecha");
+                entity.Property(e => e.MonedaCodigo).HasColumnName("moneda_codigo").HasMaxLength(10).IsRequired();
+                entity.Property(e => e.Cotizacion).HasColumnName("cotizacion").HasPrecision(18, 6);
+                entity.Property(e => e.ImporteTotal).HasColumnName("importe_total").HasPrecision(18, 2);
+                entity.Property(e => e.Estado).HasColumnName("estado").HasDefaultValue(CobranzaEstado.Borrador);
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+                entity.Property(e => e.FechaConfirmacion).HasColumnName("fecha_confirmacion");
+                entity.Property(e => e.UsuarioConfirmacion).HasColumnName("usuario_confirmacion").HasMaxLength(100);
+                entity.Property(e => e.AsientoContableId).HasColumnName("asiento_contable_id");
+
+                entity.HasIndex(e => e.ClienteExternoId)
+                    .HasDatabaseName("ix_cobranzas_cliente_externo_id");
+
+                entity.HasIndex(e => e.Estado)
+                    .HasDatabaseName("ix_cobranzas_estado");
+
+                entity.HasIndex(e => e.Fecha)
+                    .HasDatabaseName("ix_cobranzas_fecha");
+
+                entity.HasIndex(e => e.AsientoContableId)
+                    .HasDatabaseName("ix_cobranzas_asiento_contable_id");
+            });
+
+            modelBuilder.Entity<MedioPagoCobranza>(entity =>
+            {
+                entity.ToTable("cobranzas_medios_pago_catalogo");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.CodigoConceptoContable).HasColumnName("codigo_concepto_contable").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
+                entity.Property(e => e.RequiereReferencia).HasColumnName("requiere_referencia").HasDefaultValue(false);
+                entity.Property(e => e.RequiereBanco).HasColumnName("requiere_banco").HasDefaultValue(false);
+                entity.Property(e => e.RequiereFechaValor).HasColumnName("requiere_fecha_valor").HasDefaultValue(false);
+                entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_cobranzas_medios_pago_codigo")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.Activo)
+                    .HasDatabaseName("ix_cobranzas_medios_pago_activo");
+
+                entity.HasData(
+                    BuildMedioPagoCobranzaSeed(1, "EFECTIVO", "Efectivo", "CAJA", false, false, false, 10),
+                    BuildMedioPagoCobranzaSeed(2, "TRANSFERENCIA", "Transferencia bancaria", "BANCO", true, true, true, 20),
+                    BuildMedioPagoCobranzaSeed(3, "CHEQUE", "Cheque de terceros", "CHEQUES_TERCEROS", true, true, true, 30),
+                    BuildMedioPagoCobranzaSeed(4, "RETENCION_GANANCIAS", "Retencion de Ganancias sufrida", "RETENCION_GANANCIAS_SUFRIDA", true, false, false, 40),
+                    BuildMedioPagoCobranzaSeed(5, "RETENCION_IIBB", "Retencion de IIBB sufrida", "RETENCION_IIBB_SUFRIDA", true, false, false, 50)
+                );
+            });
+
+            modelBuilder.Entity<BancoCobranza>(entity =>
+            {
+                entity.ToTable("cobranzas_bancos_catalogo");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.Codigo).HasColumnName("codigo").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Nombre).HasColumnName("nombre").HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
+                entity.Property(e => e.Orden).HasColumnName("orden");
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+
+                entity.HasIndex(e => e.Codigo)
+                    .HasDatabaseName("ix_cobranzas_bancos_codigo")
+                    .IsUnique();
+
+                entity.HasIndex(e => e.Activo)
+                    .HasDatabaseName("ix_cobranzas_bancos_activo");
+
+                entity.HasData(
+                    BuildBancoCobranzaSeed(1, "NACION", "Banco de la Nacion Argentina", 10),
+                    BuildBancoCobranzaSeed(2, "PROVINCIA", "Banco Provincia", 20),
+                    BuildBancoCobranzaSeed(3, "GALICIA", "Banco Galicia", 30),
+                    BuildBancoCobranzaSeed(4, "SANTANDER", "Santander Rio", 40),
+                    BuildBancoCobranzaSeed(5, "BBVA", "BBVA", 50),
+                    BuildBancoCobranzaSeed(6, "MACRO", "Banco Macro", 60),
+                    BuildBancoCobranzaSeed(7, "CREDICOOP", "Banco Credicoop", 70),
+                    BuildBancoCobranzaSeed(8, "ICBC", "ICBC", 80),
+                    BuildBancoCobranzaSeed(9, "CIUDAD", "Banco Ciudad", 90),
+                    BuildBancoCobranzaSeed(10, "PATAGONIA", "Banco Patagonia", 100),
+                    BuildBancoCobranzaSeed(11, "SUPERVIELLE", "Banco Supervielle", 110),
+                    BuildBancoCobranzaSeed(12, "COMAFI", "Banco Comafi", 120),
+                    BuildBancoCobranzaSeed(13, "HSBC", "HSBC", 130),
+                    BuildBancoCobranzaSeed(14, "OTRO", "Otro banco", 999)
+                );
+            });
+
+            modelBuilder.Entity<CobranzaMedioPago>(entity =>
+            {
+                entity.ToTable("cobranzas_medios_pago");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.CobranzaId).HasColumnName("cobranza_id");
+                entity.Property(e => e.MedioPagoCobranzaId).HasColumnName("medio_pago_cobranza_id");
+                entity.Property(e => e.BancoCobranzaId).HasColumnName("banco_cobranza_id");
+                entity.Property(e => e.Importe).HasColumnName("importe").HasPrecision(18, 2);
+                entity.Property(e => e.Banco).HasColumnName("banco").HasMaxLength(200);
+                entity.Property(e => e.NumeroReferencia).HasColumnName("numero_referencia").HasMaxLength(100);
+                entity.Property(e => e.FechaValor).HasColumnName("fecha_valor");
+                entity.Property(e => e.Observaciones).HasColumnName("observaciones").HasMaxLength(1000);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.CobranzaId)
+                    .HasDatabaseName("ix_cobranzas_medios_pago_cobranza_id");
+
+                entity.HasIndex(e => e.MedioPagoCobranzaId)
+                    .HasDatabaseName("ix_cobranzas_medios_pago_medio_id");
+
+                entity.HasIndex(e => e.BancoCobranzaId)
+                    .HasDatabaseName("ix_cobranzas_medios_pago_banco_id");
+
+                entity.HasOne(e => e.Cobranza)
+                    .WithMany(c => c.MediosPago)
+                    .HasForeignKey(e => e.CobranzaId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.MedioPago)
+                    .WithMany(m => m.CobranzasMediosPago)
+                    .HasForeignKey(e => e.MedioPagoCobranzaId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.BancoCatalogo)
+                    .WithMany(b => b.CobranzasMediosPago)
+                    .HasForeignKey(e => e.BancoCobranzaId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<CobranzaAplicacionFactura>(entity =>
+            {
+                entity.ToTable("cobranzas_aplicaciones_facturas");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.CobranzaId).HasColumnName("cobranza_id");
+                entity.Property(e => e.VentaId).HasColumnName("venta_id");
+                entity.Property(e => e.ImporteAplicado).HasColumnName("importe_aplicado").HasPrecision(18, 2);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+                entity.Property(e => e.FechaModificacion).HasColumnName("fecha_modificacion");
+                entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
+
+                entity.HasIndex(e => e.CobranzaId)
+                    .HasDatabaseName("ix_cobranzas_aplicaciones_facturas_cobranza_id");
+
+                entity.HasIndex(e => e.VentaId)
+                    .HasDatabaseName("ix_cobranzas_aplicaciones_facturas_venta_id");
+
+                entity.HasIndex(e => new { e.CobranzaId, e.VentaId })
+                    .HasDatabaseName("ix_cobranzas_aplicaciones_facturas_cobranza_venta")
+                    .IsUnique();
+
+                entity.HasOne(e => e.Cobranza)
+                    .WithMany(c => c.AplicacionesFactura)
+                    .HasForeignKey(e => e.CobranzaId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Venta)
+                    .WithMany()
+                    .HasForeignKey(e => e.VentaId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<CobranzaAplicacionObligacion>(entity =>
+            {
+                entity.ToTable("cobranzas_aplicaciones_obligaciones");
+                entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+                entity.Property(e => e.CobranzaAplicacionFacturaId).HasColumnName("cobranza_aplicacion_factura_id");
+                entity.Property(e => e.CuotaComercialId).HasColumnName("cuota_comercial_id");
+                entity.Property(e => e.TipoObligacion).HasColumnName("tipo_obligacion").HasMaxLength(50).IsRequired();
+                entity.Property(e => e.ImporteAplicado).HasColumnName("importe_aplicado").HasPrecision(18, 2);
+                entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
+                entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta").HasMaxLength(100).IsRequired();
+
+                entity.HasIndex(e => e.CobranzaAplicacionFacturaId)
+                    .HasDatabaseName("ix_cobranzas_aplicaciones_obligaciones_aplicacion_id");
+
+                entity.HasIndex(e => e.CuotaComercialId)
+                    .HasDatabaseName("ix_cobranzas_aplicaciones_obligaciones_cuota_id");
+
+                entity.HasOne(e => e.AplicacionFactura)
+                    .WithMany(a => a.AplicacionesObligacion)
+                    .HasForeignKey(e => e.CobranzaAplicacionFacturaId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.CuotaComercial)
+                    .WithMany()
+                    .HasForeignKey(e => e.CuotaComercialId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
         }
 
         private static TipoComprobanteVenta BuildTipoComprobanteSeed(
@@ -1055,6 +1264,46 @@ namespace BudgetControl.Api.Data
                 Activo = activo,
                 Orden = orden,
                 FechaAlta = new DateTime(2026, 7, 11, 0, 0, 0, DateTimeKind.Utc),
+                UsuarioAlta = "Sistema"
+            };
+        }
+
+        private static MedioPagoCobranza BuildMedioPagoCobranzaSeed(
+            int id,
+            string codigo,
+            string descripcion,
+            string codigoConceptoContable,
+            bool requiereReferencia,
+            bool requiereBanco,
+            bool requiereFechaValor,
+            int orden)
+        {
+            return new MedioPagoCobranza
+            {
+                Id = id,
+                Codigo = codigo,
+                Descripcion = descripcion,
+                CodigoConceptoContable = codigoConceptoContable,
+                Activo = true,
+                RequiereReferencia = requiereReferencia,
+                RequiereBanco = requiereBanco,
+                RequiereFechaValor = requiereFechaValor,
+                Orden = orden,
+                FechaAlta = new DateTime(2026, 8, 17, 0, 0, 0, DateTimeKind.Utc),
+                UsuarioAlta = "Sistema"
+            };
+        }
+
+        private static BancoCobranza BuildBancoCobranzaSeed(int id, string codigo, string nombre, int orden)
+        {
+            return new BancoCobranza
+            {
+                Id = id,
+                Codigo = codigo,
+                Nombre = nombre,
+                Activo = true,
+                Orden = orden,
+                FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, DateTimeKind.Utc),
                 UsuarioAlta = "Sistema"
             };
         }

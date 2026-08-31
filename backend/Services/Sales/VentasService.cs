@@ -704,7 +704,7 @@ namespace BudgetControl.Api.Services.Sales
                 Total = total,
                 Page = page,
                 PageSize = pageSize,
-                Items = ventas.Select(v => MapVenta(v, lookups.Clientes, lookups.Obras)).ToList()
+                Items = ventas.Select(v => MapVentaWithCurrentTotals(v, lookups.Clientes, lookups.Obras)).ToList()
             };
         }
 
@@ -714,7 +714,7 @@ namespace BudgetControl.Api.Services.Sales
             if (venta == null) return null;
 
             var lookups = await LoadLookupsAsync(new[] { venta });
-            return MapVenta(venta, lookups.Clientes, lookups.Obras);
+            return MapVentaWithCurrentTotals(venta, lookups.Clientes, lookups.Obras);
         }
 
         public async Task<VentaResponse> CreateVentaAsync(VentaHeaderRequest request)
@@ -744,7 +744,7 @@ namespace BudgetControl.Api.Services.Sales
 
             venta.TipoComprobante = normalized.Relacion.TipoComprobante;
             venta.PuntoVentaComprobante = normalized.Relacion;
-            return MapVenta(venta, new Dictionary<string, Client> { [venta.ClienteExternoId] = normalized.Cliente }, new Dictionary<string, Obra> { [venta.ObraExternaId] = normalized.Obra });
+            return MapVentaWithCurrentTotals(venta, new Dictionary<string, Client> { [venta.ClienteExternoId] = normalized.Cliente }, new Dictionary<string, Obra> { [venta.ObraExternaId] = normalized.Obra });
         }
 
         public async Task<VentaResponse> UpdateVentaAsync(int id, VentaHeaderRequest request)
@@ -777,7 +777,7 @@ namespace BudgetControl.Api.Services.Sales
 
             venta.TipoComprobante = normalized.Relacion.TipoComprobante;
             venta.PuntoVentaComprobante = normalized.Relacion;
-            return MapVenta(venta, new Dictionary<string, Client> { [venta.ClienteExternoId] = normalized.Cliente }, new Dictionary<string, Obra> { [venta.ObraExternaId] = normalized.Obra });
+            return MapVentaWithCurrentTotals(venta, new Dictionary<string, Client> { [venta.ClienteExternoId] = normalized.Cliente }, new Dictionary<string, Obra> { [venta.ObraExternaId] = normalized.Obra });
         }
 
         public async Task<IEnumerable<VentaDetalleResponse>> GetDetallesAsync(int ventaId)
@@ -1365,7 +1365,13 @@ namespace BudgetControl.Api.Services.Sales
         private async Task<VentaResponse> BuildVentaResponseAsync(Venta venta)
         {
             var lookups = await LoadLookupsAsync(new[] { venta });
-            return MapVenta(venta, lookups.Clientes, lookups.Obras);
+            return MapVentaWithCurrentTotals(venta, lookups.Clientes, lookups.Obras);
+        }
+
+        private VentaResponse MapVentaWithCurrentTotals(Venta venta, IReadOnlyDictionary<string, Client> clientes, IReadOnlyDictionary<string, Obra> obras)
+        {
+            _calculador.RecalcularTotales(venta);
+            return MapVenta(venta, clientes, obras);
         }
 
         private static void MarkPercepcionPendiente(Venta venta)

@@ -289,6 +289,628 @@ namespace BudgetControl.Api.Migrations
                     b.ToTable("cuentas_contables", (string)null);
                 });
 
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.BancoCobranza", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("activo");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_alta");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("nombre");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer")
+                        .HasColumnName("orden");
+
+                    b.Property<string>("UsuarioAlta")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_alta");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Activo")
+                        .HasDatabaseName("ix_cobranzas_bancos_activo");
+
+                    b.HasIndex("Codigo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cobranzas_bancos_codigo");
+
+                    b.ToTable("cobranzas_bancos_catalogo", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Activo = true,
+                            Codigo = "NACION",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Banco de la Nacion Argentina",
+                            Orden = 10,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Activo = true,
+                            Codigo = "PROVINCIA",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Banco Provincia",
+                            Orden = 20,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Activo = true,
+                            Codigo = "GALICIA",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Banco Galicia",
+                            Orden = 30,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Activo = true,
+                            Codigo = "SANTANDER",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Santander Rio",
+                            Orden = 40,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Activo = true,
+                            Codigo = "BBVA",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "BBVA",
+                            Orden = 50,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Activo = true,
+                            Codigo = "MACRO",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Banco Macro",
+                            Orden = 60,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Activo = true,
+                            Codigo = "CREDICOOP",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Banco Credicoop",
+                            Orden = 70,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Activo = true,
+                            Codigo = "ICBC",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "ICBC",
+                            Orden = 80,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Activo = true,
+                            Codigo = "CIUDAD",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Banco Ciudad",
+                            Orden = 90,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Activo = true,
+                            Codigo = "PATAGONIA",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Banco Patagonia",
+                            Orden = 100,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Activo = true,
+                            Codigo = "SUPERVIELLE",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Banco Supervielle",
+                            Orden = 110,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Activo = true,
+                            Codigo = "COMAFI",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Banco Comafi",
+                            Orden = 120,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Activo = true,
+                            Codigo = "HSBC",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "HSBC",
+                            Orden = 130,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Activo = true,
+                            Codigo = "OTRO",
+                            FechaAlta = new DateTime(2026, 8, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Nombre = "Otro banco",
+                            Orden = 999,
+                            UsuarioAlta = "Sistema"
+                        });
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.Cobranza", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AsientoContableId")
+                        .HasColumnType("integer")
+                        .HasColumnName("asiento_contable_id");
+
+                    b.Property<string>("ClienteExternoId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("cliente_externo_id");
+
+                    b.Property<decimal>("Cotizacion")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("cotizacion");
+
+                    b.Property<int>("Estado")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("estado");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha");
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_alta");
+
+                    b.Property<DateTime?>("FechaConfirmacion")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_confirmacion");
+
+                    b.Property<DateTime?>("FechaModificacion")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_modificacion");
+
+                    b.Property<decimal>("ImporteTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("importe_total");
+
+                    b.Property<string>("MonedaCodigo")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("moneda_codigo");
+
+                    b.Property<string>("Observaciones")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("observaciones");
+
+                    b.Property<string>("UsuarioAlta")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_alta");
+
+                    b.Property<string>("UsuarioConfirmacion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_confirmacion");
+
+                    b.Property<string>("UsuarioModificacion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_modificacion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AsientoContableId")
+                        .HasDatabaseName("ix_cobranzas_asiento_contable_id");
+
+                    b.HasIndex("ClienteExternoId")
+                        .HasDatabaseName("ix_cobranzas_cliente_externo_id");
+
+                    b.HasIndex("Estado")
+                        .HasDatabaseName("ix_cobranzas_estado");
+
+                    b.HasIndex("Fecha")
+                        .HasDatabaseName("ix_cobranzas_fecha");
+
+                    b.ToTable("cobranzas", (string)null);
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.CobranzaAplicacionFactura", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CobranzaId")
+                        .HasColumnType("integer")
+                        .HasColumnName("cobranza_id");
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_alta");
+
+                    b.Property<DateTime?>("FechaModificacion")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_modificacion");
+
+                    b.Property<decimal>("ImporteAplicado")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("importe_aplicado");
+
+                    b.Property<string>("UsuarioAlta")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_alta");
+
+                    b.Property<string>("UsuarioModificacion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_modificacion");
+
+                    b.Property<int>("VentaId")
+                        .HasColumnType("integer")
+                        .HasColumnName("venta_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CobranzaId")
+                        .HasDatabaseName("ix_cobranzas_aplicaciones_facturas_cobranza_id");
+
+                    b.HasIndex("VentaId")
+                        .HasDatabaseName("ix_cobranzas_aplicaciones_facturas_venta_id");
+
+                    b.HasIndex("CobranzaId", "VentaId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cobranzas_aplicaciones_facturas_cobranza_venta");
+
+                    b.ToTable("cobranzas_aplicaciones_facturas", (string)null);
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.CobranzaAplicacionObligacion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CobranzaAplicacionFacturaId")
+                        .HasColumnType("integer")
+                        .HasColumnName("cobranza_aplicacion_factura_id");
+
+                    b.Property<int>("CuotaComercialId")
+                        .HasColumnType("integer")
+                        .HasColumnName("cuota_comercial_id");
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_alta");
+
+                    b.Property<decimal>("ImporteAplicado")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("importe_aplicado");
+
+                    b.Property<string>("TipoObligacion")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("tipo_obligacion");
+
+                    b.Property<string>("UsuarioAlta")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_alta");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CobranzaAplicacionFacturaId")
+                        .HasDatabaseName("ix_cobranzas_aplicaciones_obligaciones_aplicacion_id");
+
+                    b.HasIndex("CuotaComercialId")
+                        .HasDatabaseName("ix_cobranzas_aplicaciones_obligaciones_cuota_id");
+
+                    b.ToTable("cobranzas_aplicaciones_obligaciones", (string)null);
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.CobranzaMedioPago", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Banco")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("banco");
+
+                    b.Property<int?>("BancoCobranzaId")
+                        .HasColumnType("integer")
+                        .HasColumnName("banco_cobranza_id");
+
+                    b.Property<int>("CobranzaId")
+                        .HasColumnType("integer")
+                        .HasColumnName("cobranza_id");
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_alta");
+
+                    b.Property<DateTime?>("FechaModificacion")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_modificacion");
+
+                    b.Property<DateTime?>("FechaValor")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_valor");
+
+                    b.Property<decimal>("Importe")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("importe");
+
+                    b.Property<int>("MedioPagoCobranzaId")
+                        .HasColumnType("integer")
+                        .HasColumnName("medio_pago_cobranza_id");
+
+                    b.Property<string>("NumeroReferencia")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("numero_referencia");
+
+                    b.Property<string>("Observaciones")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("observaciones");
+
+                    b.Property<string>("UsuarioAlta")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_alta");
+
+                    b.Property<string>("UsuarioModificacion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_modificacion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BancoCobranzaId")
+                        .HasDatabaseName("ix_cobranzas_medios_pago_banco_id");
+
+                    b.HasIndex("CobranzaId")
+                        .HasDatabaseName("ix_cobranzas_medios_pago_cobranza_id");
+
+                    b.HasIndex("MedioPagoCobranzaId")
+                        .HasDatabaseName("ix_cobranzas_medios_pago_medio_id");
+
+                    b.ToTable("cobranzas_medios_pago", (string)null);
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.MedioPagoCobranza", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("activo");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("codigo");
+
+                    b.Property<string>("CodigoConceptoContable")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("codigo_concepto_contable");
+
+                    b.Property<string>("Descripcion")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("descripcion");
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_alta");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer")
+                        .HasColumnName("orden");
+
+                    b.Property<bool>("RequiereBanco")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("requiere_banco");
+
+                    b.Property<bool>("RequiereFechaValor")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("requiere_fecha_valor");
+
+                    b.Property<bool>("RequiereReferencia")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("requiere_referencia");
+
+                    b.Property<string>("UsuarioAlta")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("usuario_alta");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Activo")
+                        .HasDatabaseName("ix_cobranzas_medios_pago_activo");
+
+                    b.HasIndex("Codigo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cobranzas_medios_pago_codigo");
+
+                    b.ToTable("cobranzas_medios_pago_catalogo", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Activo = true,
+                            Codigo = "EFECTIVO",
+                            CodigoConceptoContable = "CAJA",
+                            Descripcion = "Efectivo",
+                            FechaAlta = new DateTime(2026, 8, 17, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Orden = 10,
+                            RequiereBanco = false,
+                            RequiereFechaValor = false,
+                            RequiereReferencia = false,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Activo = true,
+                            Codigo = "TRANSFERENCIA",
+                            CodigoConceptoContable = "BANCO",
+                            Descripcion = "Transferencia bancaria",
+                            FechaAlta = new DateTime(2026, 8, 17, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Orden = 20,
+                            RequiereBanco = true,
+                            RequiereFechaValor = true,
+                            RequiereReferencia = true,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Activo = true,
+                            Codigo = "CHEQUE",
+                            CodigoConceptoContable = "CHEQUES_TERCEROS",
+                            Descripcion = "Cheque de terceros",
+                            FechaAlta = new DateTime(2026, 8, 17, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Orden = 30,
+                            RequiereBanco = true,
+                            RequiereFechaValor = true,
+                            RequiereReferencia = true,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Activo = true,
+                            Codigo = "RETENCION_GANANCIAS",
+                            CodigoConceptoContable = "RETENCION_GANANCIAS_SUFRIDA",
+                            Descripcion = "Retencion de Ganancias sufrida",
+                            FechaAlta = new DateTime(2026, 8, 17, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Orden = 40,
+                            RequiereBanco = false,
+                            RequiereFechaValor = false,
+                            RequiereReferencia = true,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Activo = true,
+                            Codigo = "RETENCION_IIBB",
+                            CodigoConceptoContable = "RETENCION_IIBB_SUFRIDA",
+                            Descripcion = "Retencion de IIBB sufrida",
+                            FechaAlta = new DateTime(2026, 8, 17, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Orden = 50,
+                            RequiereBanco = false,
+                            RequiereFechaValor = false,
+                            RequiereReferencia = true,
+                            UsuarioAlta = "Sistema"
+                        });
+                });
+
             modelBuilder.Entity("BudgetControl.Api.Models.Commercial.AcuerdoComercial", b =>
                 {
                     b.Property<int>("Id")
@@ -2755,6 +3377,70 @@ namespace BudgetControl.Api.Migrations
                     b.Navigation("CuentaContable");
                 });
 
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.CobranzaAplicacionFactura", b =>
+                {
+                    b.HasOne("BudgetControl.Api.Models.Collections.Cobranza", "Cobranza")
+                        .WithMany("AplicacionesFactura")
+                        .HasForeignKey("CobranzaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BudgetControl.Api.Models.Sales.Venta", "Venta")
+                        .WithMany()
+                        .HasForeignKey("VentaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Cobranza");
+
+                    b.Navigation("Venta");
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.CobranzaAplicacionObligacion", b =>
+                {
+                    b.HasOne("BudgetControl.Api.Models.Collections.CobranzaAplicacionFactura", "AplicacionFactura")
+                        .WithMany("AplicacionesObligacion")
+                        .HasForeignKey("CobranzaAplicacionFacturaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BudgetControl.Api.Models.Commercial.CuotaComercial", "CuotaComercial")
+                        .WithMany()
+                        .HasForeignKey("CuotaComercialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AplicacionFactura");
+
+                    b.Navigation("CuotaComercial");
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.CobranzaMedioPago", b =>
+                {
+                    b.HasOne("BudgetControl.Api.Models.Collections.BancoCobranza", "BancoCatalogo")
+                        .WithMany("CobranzasMediosPago")
+                        .HasForeignKey("BancoCobranzaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BudgetControl.Api.Models.Collections.Cobranza", "Cobranza")
+                        .WithMany("MediosPago")
+                        .HasForeignKey("CobranzaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BudgetControl.Api.Models.Collections.MedioPagoCobranza", "MedioPago")
+                        .WithMany("CobranzasMediosPago")
+                        .HasForeignKey("MedioPagoCobranzaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BancoCatalogo");
+
+                    b.Navigation("Cobranza");
+
+                    b.Navigation("MedioPago");
+                });
+
             modelBuilder.Entity("BudgetControl.Api.Models.Commercial.AcuerdoComercialVia", b =>
                 {
                     b.HasOne("BudgetControl.Api.Models.Commercial.AcuerdoComercial", "AcuerdoComercial")
@@ -3082,6 +3768,28 @@ namespace BudgetControl.Api.Migrations
             modelBuilder.Entity("BudgetControl.Api.Models.Accounting.ConfiguracionContable", b =>
                 {
                     b.Navigation("Detalles");
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.BancoCobranza", b =>
+                {
+                    b.Navigation("CobranzasMediosPago");
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.Cobranza", b =>
+                {
+                    b.Navigation("AplicacionesFactura");
+
+                    b.Navigation("MediosPago");
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.CobranzaAplicacionFactura", b =>
+                {
+                    b.Navigation("AplicacionesObligacion");
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Collections.MedioPagoCobranza", b =>
+                {
+                    b.Navigation("CobranzasMediosPago");
                 });
 
             modelBuilder.Entity("BudgetControl.Api.Models.Commercial.AcuerdoComercial", b =>

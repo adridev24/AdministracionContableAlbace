@@ -26,6 +26,7 @@ namespace BudgetControl.Api.Services.Sales
         public void RecalcularTotales(Venta venta)
         {
             var detalles = venta.Detalles ?? new List<VentaDetalle>();
+            var percepciones = venta.PercepcionesIibb ?? new List<VentaPercepcionIibb>();
 
             venta.SubtotalBruto = RoundMoney(detalles.Sum(d => d.ImporteBruto));
             venta.TotalDescuentos = RoundMoney(detalles.Sum(d => d.ImporteDescuento));
@@ -34,6 +35,7 @@ namespace BudgetControl.Api.Services.Sales
             venta.TotalNoGravado = RoundMoney(detalles.Where(d => d.TipoTratamientoIva == TipoTratamientoIvaVenta.NoGravado).Sum(d => d.Neto));
             venta.TotalIva = RoundMoney(detalles.Sum(d => d.ImporteIva));
             venta.TotalAntesPercepciones = RoundMoney(detalles.Sum(d => d.TotalLinea));
+            venta.TotalPercepciones = RoundMoney(percepciones.Where(p => p.Activa).Sum(p => p.Importe));
             venta.Total = RoundMoney(venta.TotalAntesPercepciones + venta.TotalPercepciones);
         }
 

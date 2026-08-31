@@ -4,6 +4,7 @@ import Login from './Components/auth/Login';
 import Dashboard from './Components/Dashboard';
 import { comercialRoutes } from './modules/comercial';
 import { contabilidadRoutes } from './modules/contabilidad';
+import { cobranzasRoutes } from './modules/cobranzas';
 import { ventasRoutes } from './modules/ventas';
 
 function App() {
@@ -34,6 +35,13 @@ function App() {
           />
         ))}
         {ventasRoutes.map((route) => (
+          <Route
+            key={route.path}
+            path={route.path}
+            element={isAuthenticated ? route.element : <Navigate to="/login" />}
+          />
+        ))}
+        {cobranzasRoutes.map((route) => (
           <Route
             key={route.path}
             path={route.path}
