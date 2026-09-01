@@ -73,6 +73,59 @@ namespace BudgetControl.Api.DTOs.Commercial
         public CuotaEstado Estado { get; set; }
     }
 
+    public class AcuerdoSituacionVia1Response
+    {
+        public int AcuerdoId { get; set; }
+        public int ViaId { get; set; }
+        public string MonedaCodigo { get; set; } = null!;
+        public decimal MontoAcordado { get; set; }
+        public decimal TotalFacturado { get; set; }
+        public decimal TotalReservadoBorradores { get; set; }
+        public decimal PendienteFacturar { get; set; }
+        public decimal TotalCobrado { get; set; }
+        public decimal FacturadoPendienteCobro { get; set; }
+        public decimal PendienteTotal { get; set; }
+        public List<AcuerdoSituacionVia1ObligacionResponse> Obligaciones { get; set; } = new();
+    }
+
+    public class AcuerdoSituacionVia1ObligacionResponse
+    {
+        public int ObligacionId { get; set; }
+        public string Tipo { get; set; } = null!;
+        public int Numero { get; set; }
+        public DateTime FechaVencimiento { get; set; }
+        public decimal ImportePrevisto { get; set; }
+        public decimal ImporteFacturado { get; set; }
+        public decimal ImporteReservadoBorradores { get; set; }
+        public decimal PendienteFacturar { get; set; }
+        public decimal ImporteCobrado { get; set; }
+        public decimal FacturadoPendienteCobro { get; set; }
+        public decimal PendienteTotal { get; set; }
+        public string EstadoFacturacion { get; set; } = null!;
+        public string EstadoCobranza { get; set; } = null!;
+    }
+
+    public class AcuerdoSituacionVia1FacturaResponse
+    {
+        public int VentaId { get; set; }
+        public string Comprobante { get; set; } = null!;
+        public DateTime Fecha { get; set; }
+        public string Estado { get; set; } = null!;
+        public decimal TotalFactura { get; set; }
+        public decimal ImporteAplicadoObligacion { get; set; }
+    }
+
+    public class AcuerdoSituacionVia1CobranzaResponse
+    {
+        public int CobranzaId { get; set; }
+        public DateTime Fecha { get; set; }
+        public string Estado { get; set; } = null!;
+        public int VentaId { get; set; }
+        public string ComprobanteFactura { get; set; } = null!;
+        public decimal ImporteAplicadoObligacion { get; set; }
+        public string? MediosPago { get; set; }
+    }
+
     public class AjusteCuotaResponse
     {
         public int Id { get; set; }
@@ -182,13 +235,25 @@ namespace BudgetControl.Api.DTOs.Commercial
         public int AcuerdosActivos { get; set; }
         public int CuotasPendientesPeriodo { get; set; }
         public int CuotasVencidas { get; set; }
+        public List<ReporteComercialTotalMonedaResponse> TotalesPorMoneda { get; set; } = new();
         public List<ClienteDeudaReporteResponse> ClientesConDeuda { get; set; } = new();
         public List<CuotaReporteResponse> ProximosVencimientos { get; set; } = new();
+    }
+
+    public class ReporteComercialTotalMonedaResponse
+    {
+        public string MonedaCodigo { get; set; } = null!;
+        public decimal TotalAcordadoActivo { get; set; }
+        public decimal TotalCobradoPeriodo { get; set; }
+        public decimal TotalPorCobrarPeriodo { get; set; }
+        public decimal TotalVencido { get; set; }
+        public decimal SaldoTotalClientes { get; set; }
     }
 
     public class ClienteDeudaReporteResponse
     {
         public string ClienteExternoId { get; set; } = null!;
+        public string MonedaCodigo { get; set; } = null!;
         public decimal TotalAcordado { get; set; }
         public decimal TotalPagado { get; set; }
         public decimal SaldoPendiente { get; set; }

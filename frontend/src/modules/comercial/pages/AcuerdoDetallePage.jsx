@@ -8,6 +8,7 @@ import PlanPagoEditor from '../components/PlanPagoEditor';
 import CuotasComercialesTable from '../components/CuotasComercialesTable';
 import AjusteCuotaModal from '../components/AjusteCuotaModal';
 import AgregarCuotaModal from '../components/AgregarCuotaModal';
+import SituacionVia1Panel from '../components/SituacionVia1Panel';
 import useAcuerdoDetalle from '../hooks/useAcuerdoDetalle';
 import acuerdosService from '../services/acuerdosService';
 import externalDataService from '../services/externalDataService';
@@ -332,6 +333,12 @@ const AcuerdoDetallePage = () => {
           <SectionCard title="Estado comercial por via" description="Suma pagada y deuda restante de esta via.">
             <EstadoComercialResumen estado={estadoComercial} />
           </SectionCard>
+
+          {selectedVia.viaOperacion === 'Via1' && (
+            <SectionCard title="Situacion Via 1" description="Resumen de plan, facturacion y cobranzas confirmadas de la via.">
+              <SituacionVia1Panel acuerdoId={Number(id)} enabled={selectedVia.viaOperacion === 'Via1'} />
+            </SectionCard>
+          )}
 
           {isBorrador && (
             <SectionCard title="Modificar monto de la via" description="Antes de aprobar, puede recalcular las cuotas pendientes.">

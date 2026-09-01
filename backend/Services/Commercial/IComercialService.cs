@@ -15,6 +15,9 @@ namespace BudgetControl.Api.Services.Commercial
         Task<PlanPagoResponse> ActualizarPlanPagoAsync(int acuerdoViaId, UpdatePlanPagoRequest request);
         Task<EstadoComercialResponse> GetEstadoComercialAsync(int acuerdoId);
         Task<EstadoComercialResponse> GetEstadoComercialViaAsync(int acuerdoViaId);
+        Task<AcuerdoSituacionVia1Response> ObtenerSituacionVia1Async(int acuerdoId);
+        Task<IEnumerable<AcuerdoSituacionVia1FacturaResponse>> ObtenerFacturasSituacionVia1Async(int acuerdoId, int obligacionId);
+        Task<IEnumerable<AcuerdoSituacionVia1CobranzaResponse>> ObtenerCobranzasSituacionVia1Async(int acuerdoId, int obligacionId);
         Task<SaldoComercialResponse> GetSaldoComercialClienteAsync(string clienteExternoId);
         Task<SaldoComercialResponse> GetSaldoComercialObraAsync(string obraExternaId);
         Task<ReporteComercialResumenResponse> GetReporteComercialResumenAsync(DateTime periodoDesde, DateTime periodoHasta, BudgetControl.Api.Models.Commercial.ViaOperacion? viaOperacion = null);

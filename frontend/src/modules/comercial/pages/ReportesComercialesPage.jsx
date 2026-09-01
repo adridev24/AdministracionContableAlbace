@@ -95,15 +95,30 @@ const ReportesComercialesPage = () => {
     });
   }, [clientNames, obraNames, resumen]);
 
-  const kpis = useMemo(() => {
+  const totalGroups = useMemo(() => {
     if (!resumen) return [];
 
-    return [
-      { label: 'Saldo de deuda', value: resumen.saldoTotalClientes, hint: 'Saldo pendiente activo' },
-      { label: 'A cobrar en el periodo', value: resumen.totalPorCobrarPeriodo, hint: `${resumen.cuotasPendientesPeriodo} cuotas` },
-      { label: 'Cobrado en el periodo', value: resumen.totalCobradoPeriodo, hint: 'Pagos registrados' },
-      { label: 'Vencido pendiente', value: resumen.totalVencido, hint: `${resumen.cuotasVencidas} cuotas vencidas` },
-    ];
+    const totales = resumen.totalesPorMoneda?.length
+      ? resumen.totalesPorMoneda
+      : [{
+          monedaCodigo: 'ARS',
+          totalAcordadoActivo: resumen.totalAcordadoActivo,
+          saldoTotalClientes: resumen.saldoTotalClientes,
+          totalPorCobrarPeriodo: resumen.totalPorCobrarPeriodo,
+          totalCobradoPeriodo: resumen.totalCobradoPeriodo,
+          totalVencido: resumen.totalVencido,
+        }];
+
+    return totales.map((total) => ({
+      monedaCodigo: total.monedaCodigo || 'ARS',
+      items: [
+        { label: 'Acordado activo', value: total.totalAcordadoActivo, hint: 'Acuerdos vigentes' },
+        { label: 'Saldo de deuda', value: total.saldoTotalClientes, hint: 'Saldo pendiente activo' },
+        { label: 'A cobrar', value: total.totalPorCobrarPeriodo, hint: `${resumen.cuotasPendientesPeriodo} cuotas` },
+        { label: 'Cobrado', value: total.totalCobradoPeriodo, hint: 'Periodo consultado' },
+        { label: 'Vencido', value: total.totalVencido, hint: `${resumen.cuotasVencidas} cuotas` },
+      ],
+    }));
   }, [resumen]);
 
   const handlePeriodChange = (event) => {
@@ -157,12 +172,22 @@ const ReportesComercialesPage = () => {
         <LoadingSpinner />
       ) : resumen && (
         <>
-          <div className="report-kpi-grid">
-            {kpis.map((kpi) => (
-              <div className="report-kpi" key={kpi.label}>
-                <span>{kpi.label}</span>
-                <strong>{formatMoney(kpi.value ?? 0)}</strong>
-                <small>{kpi.hint}</small>
+          <div className="report-currency-groups">
+            {totalGroups.map((group) => (
+              <div className="report-currency-group" key={group.monedaCodigo}>
+                <div className="report-currency-label">
+                  <span>Moneda</span>
+                  <strong>{group.monedaCodigo}</strong>
+                </div>
+                <div className="report-kpi-grid">
+                  {group.items.map((kpi) => (
+                    <div className="report-kpi" key={`${group.monedaCodigo}-${kpi.label}`}>
+                      <span>{kpi.label}</span>
+                      <strong>{formatMoney(kpi.value ?? 0, group.monedaCodigo)}</strong>
+                      <small>{kpi.hint}</small>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -174,6 +199,7 @@ const ReportesComercialesPage = () => {
                   <thead>
                     <tr>
                       <th>Cliente</th>
+                      <th>Moneda</th>
                       <th>Acuerdos</th>
                       <th>Total acuerdos</th>
                       <th>Total pagado</th>
@@ -182,12 +208,13 @@ const ReportesComercialesPage = () => {
                   </thead>
                   <tbody>
                     {resumen.clientesConDeuda.map((cliente) => (
-                      <tr key={cliente.clienteExternoId}>
+                      <tr key={`${cliente.clienteExternoId}-${cliente.monedaCodigo || 'ARS'}`}>
                         <td><strong>{clientNames[cliente.clienteExternoId] || cliente.clienteExternoId}</strong></td>
+                        <td>{cliente.monedaCodigo || 'ARS'}</td>
                         <td>{cliente.acuerdosActivos}</td>
-                        <td>{formatMoney(cliente.totalAcordado)}</td>
-                        <td>{formatMoney(cliente.totalPagado)}</td>
-                        <td>{formatMoney(cliente.saldoPendiente)}</td>
+                        <td>{formatMoney(cliente.totalAcordado, cliente.monedaCodigo || 'ARS')}</td>
+                        <td>{formatMoney(cliente.totalPagado, cliente.monedaCodigo || 'ARS')}</td>
+                        <td>{formatMoney(cliente.saldoPendiente, cliente.monedaCodigo || 'ARS')}</td>
                       </tr>
                     ))}
                   </tbody>

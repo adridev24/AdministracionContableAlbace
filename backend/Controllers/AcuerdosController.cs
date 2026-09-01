@@ -182,6 +182,45 @@ namespace BudgetControl.Api.Controllers
             }
         }
 
+        [HttpGet("{id}/situacion-via1")]
+        public async Task<IActionResult> GetSituacionVia1(int id)
+        {
+            try
+            {
+                return Ok(await _service.ObtenerSituacionVia1Async(id));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("{id}/situacion-via1/obligaciones/{obligacionId}/facturas")]
+        public async Task<IActionResult> GetSituacionVia1Facturas(int id, int obligacionId)
+        {
+            try
+            {
+                return Ok(await _service.ObtenerFacturasSituacionVia1Async(id, obligacionId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("{id}/situacion-via1/obligaciones/{obligacionId}/cobranzas")]
+        public async Task<IActionResult> GetSituacionVia1Cobranzas(int id, int obligacionId)
+        {
+            try
+            {
+                return Ok(await _service.ObtenerCobranzasSituacionVia1Async(id, obligacionId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+        }
+
         [HttpGet("/api/comercial/acuerdos-vias/{id}/estado-comercial")]
         public async Task<IActionResult> GetEstadoComercialVia(int id)
         {

@@ -1,6 +1,8 @@
 using BudgetControl.Api.Data;
 using BudgetControl.Api.DTOs.Commercial;
+using BudgetControl.Api.Models.Collections;
 using BudgetControl.Api.Models.Commercial;
+using BudgetControl.Api.Models.Sales;
 using BudgetControl.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
@@ -339,6 +341,165 @@ namespace BudgetControl.Api.Services.Commercial
             };
         }
 
+        public async Task<AcuerdoSituacionVia1Response> ObtenerSituacionVia1Async(int acuerdoId)
+        {
+            var via = await _db.AcuerdosComercialesVias
+                .AsNoTracking()
+                .Include(v => v.PlanPago)
+                    .ThenInclude(p => p!.Cuotas)
+                .FirstOrDefaultAsync(v => v.AcuerdoComercialId == acuerdoId && v.ViaOperacion == ViaOperacion.Via1);
+
+            if (via == null)
+            {
+                throw new InvalidOperationException("El acuerdo no posee Vía 1.");
+            }
+
+            var obligacionesBase = via.PlanPago?.Cuotas
+                .Where(c => c.Estado != CuotaEstado.Anulada)
+                .OrderBy(c => c.TipoCuota == TipoCuota.Anticipo ? 0 : 1)
+                .ThenBy(c => c.FechaVencimiento)
+                .ThenBy(c => c.NumeroCuota)
+                .ToList() ?? new List<CuotaComercial>();
+
+            var obligacionIds = obligacionesBase.Select(c => c.Id).ToList();
+            var facturacion = await BuildSituacionFacturacionAsync(obligacionIds);
+            var cobranzas = await BuildSituacionCobranzasAsync(obligacionIds);
+
+            var obligaciones = obligacionesBase.Select(cuota =>
+            {
+                facturacion.TryGetValue(cuota.Id, out var facturado);
+                cobranzas.TryGetValue(cuota.Id, out var cobrado);
+
+                var previsto = RoundMoney(cuota.ImporteOriginal);
+                var importeFacturado = RoundMoney(facturado.FacturadoConfirmado);
+                var importeCobrado = RoundMoney(cobrado);
+                var pendienteFacturar = RoundMoney(Math.Max(previsto - importeFacturado, 0));
+                var facturadoPendienteCobro = RoundMoney(Math.Max(importeFacturado - importeCobrado, 0));
+                var pendienteTotal = RoundMoney(Math.Max(previsto - importeCobrado, 0));
+
+                return new AcuerdoSituacionVia1ObligacionResponse
+                {
+                    ObligacionId = cuota.Id,
+                    Tipo = cuota.TipoCuota.ToString(),
+                    Numero = cuota.NumeroCuota,
+                    FechaVencimiento = cuota.FechaVencimiento,
+                    ImportePrevisto = previsto,
+                    ImporteFacturado = importeFacturado,
+                    ImporteReservadoBorradores = RoundMoney(facturado.ReservadoBorrador),
+                    PendienteFacturar = pendienteFacturar,
+                    ImporteCobrado = importeCobrado,
+                    FacturadoPendienteCobro = facturadoPendienteCobro,
+                    PendienteTotal = pendienteTotal,
+                    EstadoFacturacion = GetEstadoFacturacion(previsto, importeFacturado),
+                    EstadoCobranza = GetEstadoCobranza(importeFacturado, importeCobrado)
+                };
+            }).ToList();
+
+            var montoAcordado = obligaciones.Any()
+                ? obligaciones.Sum(o => o.ImportePrevisto)
+                : GetMontoVigenteVia(via);
+
+            return new AcuerdoSituacionVia1Response
+            {
+                AcuerdoId = acuerdoId,
+                ViaId = via.Id,
+                MonedaCodigo = via.MonedaCodigo,
+                MontoAcordado = RoundMoney(montoAcordado),
+                TotalFacturado = RoundMoney(obligaciones.Sum(o => o.ImporteFacturado)),
+                TotalReservadoBorradores = RoundMoney(obligaciones.Sum(o => o.ImporteReservadoBorradores)),
+                PendienteFacturar = RoundMoney(obligaciones.Sum(o => o.PendienteFacturar)),
+                TotalCobrado = RoundMoney(obligaciones.Sum(o => o.ImporteCobrado)),
+                FacturadoPendienteCobro = RoundMoney(obligaciones.Sum(o => o.FacturadoPendienteCobro)),
+                PendienteTotal = RoundMoney(obligaciones.Sum(o => o.PendienteTotal)),
+                Obligaciones = obligaciones
+            };
+        }
+
+        public async Task<IEnumerable<AcuerdoSituacionVia1FacturaResponse>> ObtenerFacturasSituacionVia1Async(int acuerdoId, int obligacionId)
+        {
+            await EnsureObligacionVia1Async(acuerdoId, obligacionId);
+
+            var vinculaciones = await _db.VinculacionesFacturaComerciales
+                .AsNoTracking()
+                .Where(v => v.CuotaComercialId == obligacionId)
+                .Select(v => new
+                {
+                    v.FacturaExternaId,
+                    v.ImporteVinculado
+                })
+                .ToListAsync();
+
+            var ventaIds = vinculaciones
+                .Select(v => TryParseFacturaExternaId(v.FacturaExternaId))
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
+
+            var ventas = await _db.Ventas
+                .AsNoTracking()
+                .Include(v => v.TipoComprobante)
+                .Where(v => ventaIds.Contains(v.Id))
+                .ToDictionaryAsync(v => v.Id);
+
+            return vinculaciones
+                .Select(v => new { Vinculacion = v, VentaId = TryParseFacturaExternaId(v.FacturaExternaId) })
+                .Where(item => item.VentaId.HasValue && ventas.ContainsKey(item.VentaId.Value))
+                .Select(item =>
+                {
+                    var venta = ventas[item.VentaId!.Value];
+                    return new AcuerdoSituacionVia1FacturaResponse
+                    {
+                        VentaId = venta.Id,
+                        Comprobante = BuildComprobante(venta),
+                        Fecha = venta.FechaComprobante,
+                        Estado = venta.Estado.ToString(),
+                        TotalFactura = RoundMoney(venta.Total),
+                        ImporteAplicadoObligacion = RoundMoney(item.Vinculacion.ImporteVinculado)
+                    };
+                })
+                .OrderBy(item => item.Fecha)
+                .ThenBy(item => item.VentaId)
+                .ToList();
+        }
+
+        public async Task<IEnumerable<AcuerdoSituacionVia1CobranzaResponse>> ObtenerCobranzasSituacionVia1Async(int acuerdoId, int obligacionId)
+        {
+            await EnsureObligacionVia1Async(acuerdoId, obligacionId);
+
+            var aplicaciones = await _db.CobranzasAplicacionesObligacion
+                .AsNoTracking()
+                .Include(a => a.AplicacionFactura)
+                    .ThenInclude(a => a.Venta)
+                        .ThenInclude(v => v.TipoComprobante)
+                .Include(a => a.AplicacionFactura)
+                    .ThenInclude(a => a.Cobranza)
+                        .ThenInclude(c => c.MediosPago)
+                            .ThenInclude(m => m.MedioPago)
+                .Where(a => a.CuotaComercialId == obligacionId)
+                .ToListAsync();
+
+            return aplicaciones
+                .Select(aplicacion =>
+                {
+                    var cobranza = aplicacion.AplicacionFactura.Cobranza;
+                    var venta = aplicacion.AplicacionFactura.Venta;
+                    return new AcuerdoSituacionVia1CobranzaResponse
+                    {
+                        CobranzaId = cobranza.Id,
+                        Fecha = cobranza.Fecha,
+                        Estado = cobranza.Estado.ToString(),
+                        VentaId = venta.Id,
+                        ComprobanteFactura = BuildComprobante(venta),
+                        ImporteAplicadoObligacion = RoundMoney(aplicacion.ImporteAplicado),
+                        MediosPago = BuildMediosPago(cobranza)
+                    };
+                })
+                .OrderBy(item => item.Fecha)
+                .ThenBy(item => item.CobranzaId)
+                .ToList();
+        }
+
         public async Task<SaldoComercialResponse> GetSaldoComercialClienteAsync(string clienteExternoId)
         {
             var acuerdos = await GetAcuerdoQuery()
@@ -393,41 +554,92 @@ namespace BudgetControl.Api.Services.Commercial
                 pagosPeriodo = pagosPeriodo.Where(p => p.AcuerdoComercialVia != null && p.AcuerdoComercialVia.ViaOperacion == viaOperacion.Value).ToList();
             }
 
+            var viaIds = viasActivas.Select(v => v.Id).ToList();
+            var cobradoVia1PorVia = await BuildCobradoVia1PorViaAsync(viaIds);
+            var cobradoVia1PeriodoPorVia = await BuildCobradoVia1PorViaAsync(viaIds, desde, hasta);
+
             var deudaPorCliente = acuerdosActivosFiltrados
-                .GroupBy(a => a.ClienteExternoId)
+                .SelectMany(a => a.Vias
+                    .Where(IsViaActiva)
+                    .Where(v => !viaOperacion.HasValue || v.ViaOperacion == viaOperacion.Value)
+                    .Select(v => new { Acuerdo = a, Via = v }))
+                .GroupBy(item => new { item.Acuerdo.ClienteExternoId, item.Via.MonedaCodigo })
                 .Select(group =>
                 {
-                    var viasGrupo = group.SelectMany(a => a.Vias)
-                        .Where(IsViaActiva)
-                        .Where(v => !viaOperacion.HasValue || v.ViaOperacion == viaOperacion.Value)
-                        .ToList();
+                    var viasGrupo = group.Select(item => item.Via).ToList();
                     var totalAcordado = viasGrupo.Sum(GetMontoVigenteVia);
-                    var totalPagado = viasGrupo.Sum(GetTotalPagadoVia);
+                    var totalPagado = viasGrupo.Sum(via => GetTotalCobradoReporteVia(via, cobradoVia1PorVia));
                     return new ClienteDeudaReporteResponse
                     {
-                        ClienteExternoId = group.Key,
+                        ClienteExternoId = group.Key.ClienteExternoId,
+                        MonedaCodigo = group.Key.MonedaCodigo,
                         TotalAcordado = totalAcordado,
                         TotalPagado = totalPagado,
                         SaldoPendiente = Math.Max(totalAcordado - totalPagado, 0),
-                        AcuerdosActivos = group.Count()
+                        AcuerdosActivos = group.Select(item => item.Acuerdo.Id).Distinct().Count()
                     };
                 })
                 .Where(item => item.SaldoPendiente > 0)
-                .OrderByDescending(item => item.SaldoPendiente)
+                .OrderBy(item => item.MonedaCodigo)
+                .ThenByDescending(item => item.SaldoPendiente)
                 .ToList();
+
+            var cuotasPeriodo = cuotasPendientes.Where(c => c.FechaVencimiento >= desde && c.FechaVencimiento <= hasta).ToList();
+            var cuotasVencidas = cuotasPendientes.Where(c => c.FechaVencimiento.Date < hoy).ToList();
+            var monedas = viasActivas.Select(v => v.MonedaCodigo)
+                .Concat(pagosPeriodo.Select(p => p.MonedaCodigo))
+                .Concat(viasActivas.Where(v => cobradoVia1PeriodoPorVia.ContainsKey(v.Id)).Select(v => v.MonedaCodigo))
+                .Concat(cuotasPendientes.Select(c => c.PlanPago.AcuerdoComercialVia.MonedaCodigo))
+                .Concat(deudaPorCliente.Select(d => d.MonedaCodigo))
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(m => m)
+                .ToList();
+
+            var totalesPorMoneda = monedas.Select(moneda => new ReporteComercialTotalMonedaResponse
+            {
+                MonedaCodigo = moneda,
+                TotalAcordadoActivo = viasActivas
+                    .Where(v => v.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase))
+                    .Sum(GetMontoVigenteVia),
+                TotalCobradoPeriodo = pagosPeriodo
+                    .Where(p => p.AcuerdoComercialVia?.ViaOperacion != ViaOperacion.Via1 &&
+                        p.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase))
+                    .Sum(p => p.ImporteTotal),
+                TotalPorCobrarPeriodo = cuotasPeriodo
+                    .Where(c => c.PlanPago.AcuerdoComercialVia.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase))
+                    .Sum(c => c.SaldoPendiente),
+                TotalVencido = cuotasVencidas
+                    .Where(c => c.PlanPago.AcuerdoComercialVia.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase))
+                    .Sum(c => c.SaldoPendiente),
+                SaldoTotalClientes = deudaPorCliente
+                    .Where(d => d.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase))
+                    .Sum(d => d.SaldoPendiente)
+            }).ToList();
+
+            foreach (var total in totalesPorMoneda)
+            {
+                total.TotalCobradoPeriodo = RoundMoney(total.TotalCobradoPeriodo + viasActivas
+                    .Where(v => v.ViaOperacion == ViaOperacion.Via1 &&
+                        v.MonedaCodigo.Equals(total.MonedaCodigo, StringComparison.OrdinalIgnoreCase))
+                    .Sum(v => cobradoVia1PeriodoPorVia.GetValueOrDefault(v.Id)));
+            }
+
+            var unicoTotal = totalesPorMoneda.Count == 1 ? totalesPorMoneda[0] : null;
 
             return new ReporteComercialResumenResponse
             {
                 PeriodoDesde = desde,
                 PeriodoHasta = hasta,
-                TotalAcordadoActivo = viasActivas.Sum(GetMontoVigenteVia),
-                TotalCobradoPeriodo = pagosPeriodo.Sum(p => p.ImporteTotal),
-                TotalPorCobrarPeriodo = cuotasPendientes.Where(c => c.FechaVencimiento >= desde && c.FechaVencimiento <= hasta).Sum(c => c.SaldoPendiente),
-                TotalVencido = cuotasPendientes.Where(c => c.FechaVencimiento.Date < hoy).Sum(c => c.SaldoPendiente),
-                SaldoTotalClientes = deudaPorCliente.Sum(c => c.SaldoPendiente),
+                TotalAcordadoActivo = unicoTotal?.TotalAcordadoActivo ?? 0,
+                TotalCobradoPeriodo = unicoTotal?.TotalCobradoPeriodo ?? 0,
+                TotalPorCobrarPeriodo = unicoTotal?.TotalPorCobrarPeriodo ?? 0,
+                TotalVencido = unicoTotal?.TotalVencido ?? 0,
+                SaldoTotalClientes = unicoTotal?.SaldoTotalClientes ?? 0,
                 AcuerdosActivos = acuerdosActivosFiltrados.Count,
-                CuotasPendientesPeriodo = cuotasPendientes.Count(c => c.FechaVencimiento >= desde && c.FechaVencimiento <= hasta),
-                CuotasVencidas = cuotasPendientes.Count(c => c.FechaVencimiento.Date < hoy),
+                CuotasPendientesPeriodo = cuotasPeriodo.Count,
+                CuotasVencidas = cuotasVencidas.Count,
+                TotalesPorMoneda = totalesPorMoneda,
                 ClientesConDeuda = deudaPorCliente.Take(10).ToList(),
                 ProximosVencimientos = cuotasPendientes
                     .Where(c => c.FechaVencimiento >= hoy)
@@ -1039,10 +1251,174 @@ namespace BudgetControl.Api.Services.Commercial
             return string.IsNullOrWhiteSpace(value) ? "ARS" : value.Trim().ToUpperInvariant();
         }
 
+        private static decimal RoundMoney(decimal value)
+        {
+            return Math.Round(value, 2, MidpointRounding.AwayFromZero);
+        }
+
         private static DateTime EnsureUtc(DateTime value)
         {
             if (value.Kind == DateTimeKind.Utc) return value;
             return DateTime.SpecifyKind(value, DateTimeKind.Utc);
+        }
+
+        private async Task<Dictionary<int, SituacionFacturacionBalance>> BuildSituacionFacturacionAsync(IEnumerable<int> obligacionIds)
+        {
+            var ids = obligacionIds.Distinct().ToList();
+            if (!ids.Any()) return new Dictionary<int, SituacionFacturacionBalance>();
+
+            var vinculaciones = await _db.VinculacionesFacturaComerciales
+                .AsNoTracking()
+                .Where(v => ids.Contains(v.CuotaComercialId))
+                .Select(v => new
+                {
+                    v.CuotaComercialId,
+                    v.FacturaExternaId,
+                    v.ImporteVinculado
+                })
+                .ToListAsync();
+
+            var ventaIds = vinculaciones
+                .Select(v => TryParseFacturaExternaId(v.FacturaExternaId))
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
+
+            var estados = await _db.Ventas
+                .AsNoTracking()
+                .Where(v => ventaIds.Contains(v.Id))
+                .Select(v => new { v.Id, v.Estado })
+                .ToDictionaryAsync(v => v.Id, v => v.Estado);
+
+            var result = ids.ToDictionary(id => id, _ => SituacionFacturacionBalance.Empty);
+            foreach (var vinculacion in vinculaciones)
+            {
+                var ventaId = TryParseFacturaExternaId(vinculacion.FacturaExternaId);
+                if (!ventaId.HasValue || !estados.TryGetValue(ventaId.Value, out var estado)) continue;
+
+                var current = result.GetValueOrDefault(vinculacion.CuotaComercialId, SituacionFacturacionBalance.Empty);
+                var importe = RoundMoney(vinculacion.ImporteVinculado);
+                if (estado == VentaEstado.Confirmada)
+                {
+                    current = current with { FacturadoConfirmado = RoundMoney(current.FacturadoConfirmado + importe) };
+                }
+                else if (estado == VentaEstado.Borrador)
+                {
+                    current = current with { ReservadoBorrador = RoundMoney(current.ReservadoBorrador + importe) };
+                }
+
+                result[vinculacion.CuotaComercialId] = current;
+            }
+
+            return result;
+        }
+
+        private async Task<Dictionary<int, decimal>> BuildSituacionCobranzasAsync(IEnumerable<int> obligacionIds)
+        {
+            var ids = obligacionIds.Distinct().ToList();
+            if (!ids.Any()) return new Dictionary<int, decimal>();
+
+            var cobranzas = await _db.CobranzasAplicacionesObligacion
+                .AsNoTracking()
+                .Where(a => ids.Contains(a.CuotaComercialId) &&
+                    a.AplicacionFactura.Cobranza.Estado == CobranzaEstado.Confirmada)
+                .GroupBy(a => a.CuotaComercialId)
+                .Select(g => new { CuotaId = g.Key, Importe = g.Sum(x => x.ImporteAplicado) })
+                .ToListAsync();
+
+            return cobranzas.ToDictionary(g => g.CuotaId, g => RoundMoney(g.Importe));
+        }
+
+        private async Task<Dictionary<int, decimal>> BuildCobradoVia1PorViaAsync(IEnumerable<int> acuerdoViaIds, DateTime? desde = null, DateTime? hasta = null)
+        {
+            var ids = acuerdoViaIds.Distinct().ToList();
+            if (!ids.Any()) return new Dictionary<int, decimal>();
+
+            var query = _db.CobranzasAplicacionesObligacion
+                .AsNoTracking()
+                .Where(a => ids.Contains(a.CuotaComercial.PlanPago.AcuerdoComercialViaId) &&
+                    a.CuotaComercial.PlanPago.AcuerdoComercialVia.ViaOperacion == ViaOperacion.Via1 &&
+                    a.AplicacionFactura.Cobranza.Estado == CobranzaEstado.Confirmada);
+
+            if (desde.HasValue)
+            {
+                query = query.Where(a => a.AplicacionFactura.Cobranza.Fecha >= desde.Value);
+            }
+
+            if (hasta.HasValue)
+            {
+                query = query.Where(a => a.AplicacionFactura.Cobranza.Fecha <= hasta.Value);
+            }
+
+            var cobranzas = await query
+                .GroupBy(a => a.CuotaComercial.PlanPago.AcuerdoComercialViaId)
+                .Select(g => new { AcuerdoViaId = g.Key, Importe = g.Sum(x => x.ImporteAplicado) })
+                .ToListAsync();
+
+            return cobranzas.ToDictionary(g => g.AcuerdoViaId, g => RoundMoney(g.Importe));
+        }
+
+        private static decimal GetTotalCobradoReporteVia(AcuerdoComercialVia via, IReadOnlyDictionary<int, decimal> cobradoVia1PorVia)
+        {
+            return via.ViaOperacion == ViaOperacion.Via1
+                ? cobradoVia1PorVia.GetValueOrDefault(via.Id)
+                : GetTotalPagadoVia(via);
+        }
+
+        private async Task EnsureObligacionVia1Async(int acuerdoId, int obligacionId)
+        {
+            var exists = await _db.CuotasComerciales
+                .AsNoTracking()
+                .AnyAsync(c => c.Id == obligacionId &&
+                    c.PlanPago.AcuerdoComercialVia.AcuerdoComercialId == acuerdoId &&
+                    c.PlanPago.AcuerdoComercialVia.ViaOperacion == ViaOperacion.Via1 &&
+                    c.Estado != CuotaEstado.Anulada);
+
+            if (!exists)
+            {
+                throw new InvalidOperationException("La obligación no pertenece a la Vía 1 del acuerdo.");
+            }
+        }
+
+        private static int? TryParseFacturaExternaId(string facturaExternaId)
+        {
+            return int.TryParse(facturaExternaId, out var ventaId) ? ventaId : null;
+        }
+
+        private static string GetEstadoFacturacion(decimal previsto, decimal facturado)
+        {
+            if (facturado <= 0) return "SIN_FACTURAR";
+            return facturado < previsto ? "PARCIALMENTE_FACTURADA" : "FACTURADA";
+        }
+
+        private static string GetEstadoCobranza(decimal facturado, decimal cobrado)
+        {
+            if (cobrado <= 0 || facturado <= 0) return "SIN_COBRAR";
+            return cobrado < facturado ? "PARCIALMENTE_COBRADA" : "COBRADA";
+        }
+
+        private static string BuildComprobante(Venta venta)
+        {
+            var tipo = venta.TipoComprobante?.Codigo ?? "Factura";
+            return $"{tipo} {venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}";
+        }
+
+        private static string? BuildMediosPago(Cobranza cobranza)
+        {
+            var medios = cobranza.MediosPago
+                .OrderBy(m => m.Id)
+                .Select(m =>
+                {
+                    var nombre = m.MedioPago?.Descripcion ?? "Medio";
+                    var banco = string.IsNullOrWhiteSpace(m.Banco) ? null : m.Banco.Trim();
+                    var referencia = string.IsNullOrWhiteSpace(m.NumeroReferencia) ? null : m.NumeroReferencia.Trim();
+                    var partes = new[] { nombre, banco, referencia }.Where(p => !string.IsNullOrWhiteSpace(p));
+                    return $"{string.Join(" / ", partes)} ({RoundMoney(m.Importe):N2})";
+                })
+                .ToList();
+
+            return medios.Any() ? string.Join("; ", medios) : null;
         }
 
         private static AcuerdoDetalleResponse MapDetalle(AcuerdoComercial acuerdo)
@@ -1270,6 +1646,11 @@ namespace BudgetControl.Api.Services.Commercial
                 TotalPagado = totalPagado,
                 SaldoRestante = Math.Max(totalPrometido - totalPagado, 0)
             };
+        }
+
+        private readonly record struct SituacionFacturacionBalance(decimal FacturadoConfirmado, decimal ReservadoBorrador)
+        {
+            public static SituacionFacturacionBalance Empty => new(0, 0);
         }
     }
 }
