@@ -2,9 +2,11 @@ using BudgetControl.Api.Data;
 using BudgetControl.Api.DTOs.Accounting;
 using BudgetControl.Api.DTOs.Sales;
 using BudgetControl.Api.Models;
+using BudgetControl.Api.Models.Commercial;
 using BudgetControl.Api.Models.Sales;
 using BudgetControl.Api.Services.Accounting;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using System.Linq.Expressions;
 
 namespace BudgetControl.Api.Services.Sales
@@ -876,6 +878,83 @@ namespace BudgetControl.Api.Services.Sales
             return await BuildVentaResponseAsync(venta);
         }
 
+        public async Task<IEnumerable<VentaObligacionVia1DisponibleResponse>> GetObligacionesVia1DisponiblesAsync(int ventaId)
+        {
+            var venta = await _db.Ventas.AsNoTracking().FirstOrDefaultAsync(v => v.Id == ventaId);
+            if (venta == null) throw new InvalidOperationException("Venta no encontrada.");
+
+            var obligaciones = await GetObligacionesVia1CompatiblesQuery(venta)
+                .AsNoTracking()
+                .OrderBy(c => c.TipoCuota == TipoCuota.Anticipo ? 0 : 1)
+                .ThenBy(c => c.FechaVencimiento)
+                .ThenBy(c => c.NumeroCuota)
+                .ToListAsync();
+
+            if (!obligaciones.Any()) return new List<VentaObligacionVia1DisponibleResponse>();
+
+            var balances = await BuildObligacionFacturacionBalancesAsync(obligaciones.Select(o => o.Id), venta.Id);
+            return obligaciones
+                .Select(o => MapObligacionDisponible(o, balances.GetValueOrDefault(o.Id, ObligacionFacturacionBalance.Empty)))
+                .Where(o => o.SaldoDisponible > 0 || o.ImporteAplicadoFacturaActual > 0)
+                .ToList();
+        }
+
+        public async Task<IEnumerable<VentaVinculacionPlanResponse>> GetVinculacionesPlanAsync(int ventaId)
+        {
+            var exists = await _db.Ventas.AsNoTracking().AnyAsync(v => v.Id == ventaId);
+            if (!exists) throw new InvalidOperationException("Venta no encontrada.");
+
+            var vinculaciones = await GetVinculacionesPlanQuery(ventaId)
+                .AsNoTracking()
+                .OrderBy(v => v.CuotaComercial.TipoCuota == TipoCuota.Anticipo ? 0 : 1)
+                .ThenBy(v => v.CuotaComercial.FechaVencimiento)
+                .ThenBy(v => v.CuotaComercial.NumeroCuota)
+                .ToListAsync();
+            return vinculaciones.Select(MapVinculacionPlan).ToList();
+        }
+
+        public async Task<IEnumerable<VentaVinculacionPlanResponse>> UpdateVinculacionesPlanAsync(int ventaId, IEnumerable<VentaVinculacionPlanRequest> request)
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            var venta = await _db.Ventas
+                .Include(v => v.TipoComprobante)
+                .Include(v => v.Detalles)
+                .Include(v => v.PercepcionesIibb)
+                .FirstOrDefaultAsync(v => v.Id == ventaId);
+            if (venta == null) throw new InvalidOperationException("Venta no encontrada.");
+            EnsureBorrador(venta);
+
+            _calculador.RecalcularTotales(venta);
+            var aplicaciones = NormalizeVinculacionesRequest(request);
+            await ValidateVinculacionesPlanAsync(venta, aplicaciones, requireCompleteAmount: false);
+
+            var facturaId = BuildFacturaExternaId(venta.Id);
+            var actuales = await _db.VinculacionesFacturaComerciales
+                .Where(v => v.FacturaExternaId == facturaId)
+                .ToListAsync();
+            _db.VinculacionesFacturaComerciales.RemoveRange(actuales);
+
+            var comprobante = BuildNumeroFactura(venta);
+            foreach (var aplicacion in aplicaciones)
+            {
+                _db.VinculacionesFacturaComerciales.Add(new VinculacionFacturaComercial
+                {
+                    CuotaComercialId = aplicacion.ObligacionId,
+                    FacturaExternaId = facturaId,
+                    NumeroFactura = comprobante,
+                    ImporteVinculado = RoundMoney(aplicacion.ImporteAplicado),
+                    FechaVinculacion = DateTime.UtcNow
+                });
+            }
+
+            venta.FechaModificacion = DateTime.UtcNow;
+            venta.UsuarioModificacion = _userContext.UserName;
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return await GetVinculacionesPlanAsync(ventaId);
+        }
+
         public async Task<VentaConfirmacionValidacionResponse> ValidarConfirmacionAsync(int ventaId)
         {
             var venta = await GetVentaQuery(false).FirstOrDefaultAsync(v => v.Id == ventaId);
@@ -889,7 +968,7 @@ namespace BudgetControl.Api.Services.Sales
 
         public async Task<VentaConfirmacionResponse> ConfirmarVentaAsync(int ventaId)
         {
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             var venta = await GetVentaQuery(false).FirstOrDefaultAsync(v => v.Id == ventaId);
             if (venta == null) throw new InvalidOperationException("Venta no encontrada.");
             if (venta.Estado == VentaEstado.Confirmada) throw new InvalidOperationException("La factura ya fue confirmada.");
@@ -902,6 +981,7 @@ namespace BudgetControl.Api.Services.Sales
             }
 
             _calculador.RecalcularTotales(venta);
+            var cantidadObligacionesAplicadas = await ValidateVinculacionesPlanForConfirmacionAsync(venta);
             var solicitud = BuildSolicitudContable(venta);
             await EnsureMovimientoCuentaCorrienteAsync(venta);
 
@@ -924,7 +1004,7 @@ namespace BudgetControl.Api.Services.Sales
                 AsientoYaExistia = asiento.YaExistia,
                 TotalFinal = venta.Total,
                 ImporteAsociadoPlan = GetImporteAsociadoPlan(venta),
-                CantidadObligacionesAplicadas = 0,
+                CantidadObligacionesAplicadas = cantidadObligacionesAplicadas,
                 CodigoOperacionContable = CodigoOperacionFacturaVenta
             };
         }
@@ -975,9 +1055,10 @@ namespace BudgetControl.Api.Services.Sales
 
             ValidateTotalesConfirmacion(venta, errores);
             ValidatePercepcionConfirmacion(venta, errores, advertencias);
+            await ValidateVinculacionesPlanConfirmacionAsync(venta, errores);
             await ValidateConfiguracionContableConfirmacionAsync(venta, errores);
 
-            return BuildValidationResult(venta, errores, advertencias);
+            return await BuildValidationResultAsync(venta, errores, advertencias);
         }
 
         private async Task ValidateDetallesConfirmacionAsync(Venta venta, ICollection<string> errores)
@@ -1072,6 +1153,230 @@ namespace BudgetControl.Api.Services.Sales
                     ? "La factura no posee percepcion de Ingresos Brutos aplicada."
                     : $"La factura no posee percepcion aplicada: {motivo}");
             }
+        }
+
+        private async Task ValidateVinculacionesPlanConfirmacionAsync(Venta venta, ICollection<string> errores)
+        {
+            try
+            {
+                await ValidateVinculacionesPlanForConfirmacionAsync(venta);
+            }
+            catch (InvalidOperationException ex)
+            {
+                errores.Add(ex.Message);
+            }
+        }
+
+        private async Task<int> ValidateVinculacionesPlanForConfirmacionAsync(Venta venta)
+        {
+            var vinculaciones = await GetVinculacionesPlanQuery(venta.Id)
+                .AsNoTracking()
+                .Select(v => new VentaVinculacionPlanRequest
+                {
+                    ObligacionId = v.CuotaComercialId,
+                    ImporteAplicado = v.ImporteVinculado
+                })
+                .ToListAsync();
+
+            await ValidateVinculacionesPlanAsync(venta, vinculaciones, requireCompleteAmount: true);
+            return vinculaciones.Select(v => v.ObligacionId).Distinct().Count();
+        }
+
+        private async Task ValidateVinculacionesPlanAsync(Venta venta, List<VentaVinculacionPlanRequest> aplicaciones, bool requireCompleteAmount)
+        {
+            var importeAsociable = GetImporteAsociadoPlan(venta);
+            var totalAplicado = RoundMoney(aplicaciones.Sum(a => a.ImporteAplicado));
+            if (totalAplicado > importeAsociable)
+            {
+                throw new InvalidOperationException("El total aplicado al plan supera el importe comercial asociable de la factura.");
+            }
+
+            var tieneObligacionesVia1 = await GetObligacionesVia1CompatiblesQuery(venta).AnyAsync();
+            if (requireCompleteAmount && tieneObligacionesVia1 && importeAsociable > 0 && totalAplicado != importeAsociable)
+            {
+                throw new InvalidOperationException("La factura posee obligaciones de Via 1 compatibles y debe aplicar al plan el importe comercial asociable completo.");
+            }
+
+            if (!aplicaciones.Any()) return;
+            if (!tieneObligacionesVia1)
+            {
+                throw new InvalidOperationException("La factura no posee obligaciones de Via 1 compatibles para aplicar.");
+            }
+
+            var obligacionIds = aplicaciones.Select(a => a.ObligacionId).Distinct().ToList();
+            var obligaciones = await GetObligacionesVia1CompatiblesQuery(venta)
+                .Where(c => obligacionIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id);
+
+            var missing = obligacionIds.Where(id => !obligaciones.ContainsKey(id)).ToList();
+            if (missing.Any())
+            {
+                throw new InvalidOperationException("Una o mas obligaciones no pertenecen a Via 1 o no son compatibles con la factura.");
+            }
+
+            var balances = await BuildObligacionFacturacionBalancesAsync(obligacionIds, venta.Id);
+            foreach (var aplicacion in aplicaciones)
+            {
+                if (RoundMoney(aplicacion.ImporteAplicado) <= 0)
+                {
+                    throw new InvalidOperationException("El importe aplicado debe ser mayor a cero.");
+                }
+
+                var obligacion = obligaciones[aplicacion.ObligacionId];
+                var balance = balances.GetValueOrDefault(obligacion.Id, ObligacionFacturacionBalance.Empty);
+                var disponible = RoundMoney(obligacion.ImporteOriginal - balance.FacturadoConfirmado - balance.ReservadoBorrador);
+                if (RoundMoney(aplicacion.ImporteAplicado) > disponible)
+                {
+                    throw new InvalidOperationException($"El importe aplicado supera el saldo facturable disponible de la obligacion {obligacion.Id}.");
+                }
+            }
+        }
+
+        private IQueryable<CuotaComercial> GetObligacionesVia1CompatiblesQuery(Venta venta)
+        {
+            return _db.CuotasComerciales
+                .Include(c => c.PlanPago)
+                    .ThenInclude(p => p.AcuerdoComercialVia)
+                        .ThenInclude(v => v.AcuerdoComercial)
+                .Where(c => c.Estado != CuotaEstado.Anulada)
+                .Where(c => c.PlanPago.AcuerdoComercialVia.ViaOperacion == ViaOperacion.Via1)
+                .Where(c => c.PlanPago.AcuerdoComercialVia.Estado != AcuerdoEstado.Anulado &&
+                    c.PlanPago.AcuerdoComercialVia.Estado != AcuerdoEstado.Finalizado)
+                .Where(c => c.PlanPago.AcuerdoComercialVia.AcuerdoComercial.Estado != AcuerdoEstado.Anulado &&
+                    c.PlanPago.AcuerdoComercialVia.AcuerdoComercial.Estado != AcuerdoEstado.Finalizado)
+                .Where(c => c.PlanPago.AcuerdoComercialVia.AcuerdoComercial.ClienteExternoId == venta.ClienteExternoId)
+                .Where(c => c.PlanPago.AcuerdoComercialVia.AcuerdoComercial.ObraExternaId == venta.ObraExternaId)
+                .Where(c => c.PlanPago.AcuerdoComercialVia.MonedaCodigo == venta.MonedaCodigo);
+        }
+
+        private IQueryable<VinculacionFacturaComercial> GetVinculacionesPlanQuery(int ventaId)
+        {
+            var facturaId = BuildFacturaExternaId(ventaId);
+            return _db.VinculacionesFacturaComerciales
+                .Include(v => v.CuotaComercial)
+                    .ThenInclude(c => c.PlanPago)
+                        .ThenInclude(p => p.AcuerdoComercialVia)
+                            .ThenInclude(v => v.AcuerdoComercial)
+                .Where(v => v.FacturaExternaId == facturaId);
+        }
+
+        private async Task<Dictionary<int, ObligacionFacturacionBalance>> BuildObligacionFacturacionBalancesAsync(IEnumerable<int> obligacionIds, int ventaActualId)
+        {
+            var ids = obligacionIds.Distinct().ToList();
+            if (!ids.Any()) return new Dictionary<int, ObligacionFacturacionBalance>();
+
+            var vinculaciones = await _db.VinculacionesFacturaComerciales
+                .AsNoTracking()
+                .Where(v => ids.Contains(v.CuotaComercialId))
+                .Select(v => new
+                {
+                    v.CuotaComercialId,
+                    v.FacturaExternaId,
+                    v.ImporteVinculado
+                })
+                .ToListAsync();
+
+            var ventaIds = vinculaciones
+                .Select(v => int.TryParse(v.FacturaExternaId, out var ventaId) ? ventaId : (int?)null)
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
+
+            var estados = await _db.Ventas
+                .AsNoTracking()
+                .Where(v => ventaIds.Contains(v.Id))
+                .Select(v => new { v.Id, v.Estado })
+                .ToDictionaryAsync(v => v.Id, v => v.Estado);
+
+            var result = ids.ToDictionary(id => id, _ => ObligacionFacturacionBalance.Empty);
+            foreach (var vinculacion in vinculaciones)
+            {
+                if (!int.TryParse(vinculacion.FacturaExternaId, out var ventaId)) continue;
+                if (!estados.TryGetValue(ventaId, out var estado)) continue;
+
+                var current = result.GetValueOrDefault(vinculacion.CuotaComercialId, ObligacionFacturacionBalance.Empty);
+                var importe = RoundMoney(vinculacion.ImporteVinculado);
+                if (ventaId == ventaActualId)
+                {
+                    current = current with { AplicadoFacturaActual = RoundMoney(current.AplicadoFacturaActual + importe) };
+                }
+                else if (estado == VentaEstado.Confirmada)
+                {
+                    current = current with { FacturadoConfirmado = RoundMoney(current.FacturadoConfirmado + importe) };
+                }
+                else if (estado == VentaEstado.Borrador)
+                {
+                    current = current with { ReservadoBorrador = RoundMoney(current.ReservadoBorrador + importe) };
+                }
+
+                result[vinculacion.CuotaComercialId] = current;
+            }
+
+            return result;
+        }
+
+        private static List<VentaVinculacionPlanRequest> NormalizeVinculacionesRequest(IEnumerable<VentaVinculacionPlanRequest> request)
+        {
+            var aplicaciones = request
+                .Select(r => new VentaVinculacionPlanRequest
+                {
+                    ObligacionId = r.ObligacionId,
+                    ImporteAplicado = RoundMoney(r.ImporteAplicado)
+                })
+                .Where(r => r.ObligacionId > 0 || r.ImporteAplicado != 0)
+                .ToList();
+
+            var duplicated = aplicaciones
+                .GroupBy(r => r.ObligacionId)
+                .FirstOrDefault(g => g.Key > 0 && g.Count() > 1);
+            if (duplicated != null)
+            {
+                throw new InvalidOperationException("No se puede aplicar dos veces la misma obligacion en una factura.");
+            }
+
+            return aplicaciones;
+        }
+
+        private static VentaObligacionVia1DisponibleResponse MapObligacionDisponible(CuotaComercial obligacion, ObligacionFacturacionBalance balance)
+        {
+            var via = obligacion.PlanPago.AcuerdoComercialVia;
+            return new VentaObligacionVia1DisponibleResponse
+            {
+                ObligacionId = obligacion.Id,
+                TipoObligacion = obligacion.TipoCuota.ToString(),
+                NumeroCuota = obligacion.NumeroCuota,
+                FechaVencimiento = obligacion.FechaVencimiento,
+                AcuerdoComercialId = via.AcuerdoComercialId,
+                AcuerdoComercialViaId = via.Id,
+                NumeroAcuerdo = via.AcuerdoComercial.NumeroAcuerdo,
+                MonedaCodigo = via.MonedaCodigo,
+                ImportePrevisto = RoundMoney(obligacion.ImporteOriginal),
+                ImporteFacturadoConfirmado = balance.FacturadoConfirmado,
+                ImporteReservado = balance.ReservadoBorrador,
+                SaldoDisponible = Math.Max(RoundMoney(obligacion.ImporteOriginal - balance.FacturadoConfirmado - balance.ReservadoBorrador), 0),
+                ImporteAplicadoFacturaActual = balance.AplicadoFacturaActual
+            };
+        }
+
+        private static VentaVinculacionPlanResponse MapVinculacionPlan(VinculacionFacturaComercial vinculacion)
+        {
+            var cuota = vinculacion.CuotaComercial;
+            var via = cuota.PlanPago.AcuerdoComercialVia;
+            return new VentaVinculacionPlanResponse
+            {
+                VinculacionId = vinculacion.Id,
+                ObligacionId = vinculacion.CuotaComercialId,
+                Tipo = cuota.TipoCuota.ToString(),
+                NumeroCuota = cuota.NumeroCuota,
+                FechaVencimiento = cuota.FechaVencimiento,
+                AcuerdoComercialId = via.AcuerdoComercialId,
+                AcuerdoComercialViaId = via.Id,
+                NumeroAcuerdo = via.AcuerdoComercial.NumeroAcuerdo,
+                NumeroFactura = vinculacion.NumeroFactura,
+                ImporteAplicado = RoundMoney(vinculacion.ImporteVinculado),
+                FechaVinculacion = vinculacion.FechaVinculacion
+            };
         }
 
         private async Task ValidateConfiguracionContableConfirmacionAsync(Venta venta, ICollection<string> errores)
@@ -1172,7 +1477,7 @@ namespace BudgetControl.Api.Services.Sales
             };
         }
 
-        private static VentaConfirmacionValidacionResponse BuildValidationResult(Venta? venta, List<string> errores, List<string> advertencias)
+        private static VentaConfirmacionValidacionResponse BuildValidationResult(Venta? venta, List<string> errores, List<string> advertencias, int cantidadObligacionesAplicadas = 0)
         {
             return new VentaConfirmacionValidacionResponse
             {
@@ -1181,10 +1486,36 @@ namespace BudgetControl.Api.Services.Sales
                 Advertencias = advertencias.Distinct().ToList(),
                 TotalFinal = venta?.Total ?? 0,
                 ImporteAsociadoPlan = venta == null ? 0 : GetImporteAsociadoPlan(venta),
-                CantidadObligacionesAplicadas = 0,
+                CantidadObligacionesAplicadas = cantidadObligacionesAplicadas,
                 CodigoOperacionContable = CodigoOperacionFacturaVenta,
                 ConceptosContables = BuildSolicitudConceptos(venta)
             };
+        }
+
+        private async Task<VentaConfirmacionValidacionResponse> BuildValidationResultAsync(Venta venta, List<string> errores, List<string> advertencias)
+        {
+            return new VentaConfirmacionValidacionResponse
+            {
+                EsValida = errores.Count == 0,
+                Errores = errores.Distinct().ToList(),
+                Advertencias = advertencias.Distinct().ToList(),
+                TotalFinal = venta.Total,
+                ImporteAsociadoPlan = GetImporteAsociadoPlan(venta),
+                CantidadObligacionesAplicadas = await GetCantidadObligacionesAplicadasAsync(venta.Id),
+                CodigoOperacionContable = CodigoOperacionFacturaVenta,
+                ConceptosContables = BuildSolicitudConceptos(venta)
+            };
+        }
+
+        private async Task<int> GetCantidadObligacionesAplicadasAsync(int ventaId)
+        {
+            var facturaId = BuildFacturaExternaId(ventaId);
+            return await _db.VinculacionesFacturaComerciales
+                .AsNoTracking()
+                .Where(v => v.FacturaExternaId == facturaId)
+                .Select(v => v.CuotaComercialId)
+                .Distinct()
+                .CountAsync();
         }
 
         private static List<string> BuildSolicitudConceptos(Venta? venta)
@@ -1211,6 +1542,16 @@ namespace BudgetControl.Api.Services.Sales
         private static decimal RoundMoney(decimal value)
         {
             return Math.Round(value, 2, MidpointRounding.AwayFromZero);
+        }
+
+        private static string BuildFacturaExternaId(int ventaId)
+        {
+            return ventaId.ToString();
+        }
+
+        private static string BuildNumeroFactura(Venta venta)
+        {
+            return $"{venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}";
         }
 
         private IQueryable<Venta> GetVentaQuery(bool asNoTracking = true)
@@ -1247,6 +1588,14 @@ namespace BudgetControl.Api.Services.Sales
                 .Include(i => i.NomencladorPredeterminado);
 
             return asNoTracking ? query.AsNoTracking() : query;
+        }
+
+        private sealed record ObligacionFacturacionBalance(
+            decimal FacturadoConfirmado,
+            decimal ReservadoBorrador,
+            decimal AplicadoFacturaActual)
+        {
+            public static ObligacionFacturacionBalance Empty { get; } = new(0, 0, 0);
         }
 
         private async Task<Venta> GetVentaForDetalleAsync(int ventaId)

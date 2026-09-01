@@ -91,6 +91,12 @@ const ventasService = {
     apiClient.get(`/api/ventas/facturas/${id}/validacion-confirmacion`).then((res) => res.data),
   confirmarFactura: (id) =>
     apiClient.post(`/api/ventas/facturas/${id}/confirmar`).then((res) => res.data),
+  getObligacionesVia1Disponibles: (ventaId) =>
+    apiClient.get(`/api/ventas/${ventaId}/obligaciones-via1-disponibles`).then((res) => res.data),
+  getVinculacionesPlan: (ventaId) =>
+    apiClient.get(`/api/ventas/${ventaId}/vinculaciones-plan`).then((res) => res.data),
+  updateVinculacionesPlan: (ventaId, payload) =>
+    apiClient.put(`/api/ventas/${ventaId}/vinculaciones-plan`, payload).then((res) => res.data),
   getVentaDetalles: (ventaId) => apiClient.get(`/api/ventas/${ventaId}/detalles`).then((res) => res.data),
   createVentaDetalle: (ventaId, payload) => apiClient.post(`/api/ventas/${ventaId}/detalles`, payload).then((res) => res.data),
   updateVentaDetalle: (ventaId, detalleId, payload) =>

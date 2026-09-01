@@ -550,6 +550,45 @@ namespace BudgetControl.Api.Controllers.Sales
             }
         }
 
+        [HttpGet("{ventaId}/obligaciones-via1-disponibles")]
+        public async Task<IActionResult> GetObligacionesVia1Disponibles(int ventaId)
+        {
+            try
+            {
+                return Ok(await _service.GetObligacionesVia1DisponiblesAsync(ventaId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("{ventaId}/vinculaciones-plan")]
+        public async Task<IActionResult> GetVinculacionesPlan(int ventaId)
+        {
+            try
+            {
+                return Ok(await _service.GetVinculacionesPlanAsync(ventaId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("{ventaId}/vinculaciones-plan")]
+        public async Task<IActionResult> UpdateVinculacionesPlan(int ventaId, [FromBody] List<VentaVinculacionPlanRequest> request)
+        {
+            try
+            {
+                return Ok(await _service.UpdateVinculacionesPlanAsync(ventaId, request ?? new List<VentaVinculacionPlanRequest>()));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpGet("facturas/{facturaId}/validacion-confirmacion")]
         public async Task<IActionResult> ValidarConfirmacionFactura(int facturaId)
         {

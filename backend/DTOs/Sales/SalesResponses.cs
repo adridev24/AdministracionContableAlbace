@@ -131,6 +131,38 @@ namespace BudgetControl.Api.DTOs.Sales
         public string CodigoOperacionContable { get; set; } = string.Empty;
     }
 
+    public class VentaObligacionVia1DisponibleResponse
+    {
+        public int ObligacionId { get; set; }
+        public string TipoObligacion { get; set; } = string.Empty;
+        public int NumeroCuota { get; set; }
+        public DateTime FechaVencimiento { get; set; }
+        public int AcuerdoComercialId { get; set; }
+        public int AcuerdoComercialViaId { get; set; }
+        public string NumeroAcuerdo { get; set; } = string.Empty;
+        public string MonedaCodigo { get; set; } = string.Empty;
+        public decimal ImportePrevisto { get; set; }
+        public decimal ImporteFacturadoConfirmado { get; set; }
+        public decimal ImporteReservado { get; set; }
+        public decimal SaldoDisponible { get; set; }
+        public decimal ImporteAplicadoFacturaActual { get; set; }
+    }
+
+    public class VentaVinculacionPlanResponse
+    {
+        public int VinculacionId { get; set; }
+        public int ObligacionId { get; set; }
+        public string Tipo { get; set; } = string.Empty;
+        public int NumeroCuota { get; set; }
+        public DateTime FechaVencimiento { get; set; }
+        public int AcuerdoComercialId { get; set; }
+        public int AcuerdoComercialViaId { get; set; }
+        public string NumeroAcuerdo { get; set; } = string.Empty;
+        public string NumeroFactura { get; set; } = string.Empty;
+        public decimal ImporteAplicado { get; set; }
+        public DateTime FechaVinculacion { get; set; }
+    }
+
     public class VentaListResponse
     {
         public int Total { get; set; }

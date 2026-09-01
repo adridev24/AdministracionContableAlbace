@@ -4,6 +4,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import SectionCard from '../../../shared/components/SectionCard';
 import VentaDetalleForm from '../components/VentaDetalleForm';
 import VentaDetalleTable from '../components/VentaDetalleTable';
+import VentaAplicacionesPlanVia1 from '../components/VentaAplicacionesPlanVia1';
 import VentaPercepcionIibbPanel from '../components/VentaPercepcionIibbPanel';
 import VentaTotalsPanel from '../components/VentaTotalsPanel';
 import ventasService from '../services/ventasService';
@@ -333,6 +334,13 @@ const VentaDetallePage = () => {
               )}
             </SectionCard>
           )}
+
+          <VentaAplicacionesPlanVia1
+            venta={venta}
+            readOnly={isConfirmed}
+            disabled={saving || confirming || calculatingPercepcion}
+            onSaved={loadData}
+          />
 
           <SectionCard title="Detalles">
             <VentaDetalleTable

@@ -114,6 +114,15 @@ namespace BudgetControl.Api.DTOs.Sales
         public string? Observaciones { get; set; }
     }
 
+    public class VentaVinculacionPlanRequest
+    {
+        [Required]
+        public int ObligacionId { get; set; }
+
+        [Range(0.01, double.MaxValue)]
+        public decimal ImporteAplicado { get; set; }
+    }
+
     public class ClientePercepcionIibbConfigRequest
     {
         [Required]

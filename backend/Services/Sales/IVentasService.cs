@@ -48,6 +48,9 @@ namespace BudgetControl.Api.Services.Sales
         Task<VentaDetalleMutationResponse> CreateDetalleAsync(int ventaId, VentaDetalleRequest request);
         Task<VentaDetalleMutationResponse> UpdateDetalleAsync(int ventaId, int detalleId, VentaDetalleRequest request);
         Task<VentaResponse> DeleteDetalleAsync(int ventaId, int detalleId);
+        Task<IEnumerable<VentaObligacionVia1DisponibleResponse>> GetObligacionesVia1DisponiblesAsync(int ventaId);
+        Task<IEnumerable<VentaVinculacionPlanResponse>> GetVinculacionesPlanAsync(int ventaId);
+        Task<IEnumerable<VentaVinculacionPlanResponse>> UpdateVinculacionesPlanAsync(int ventaId, IEnumerable<VentaVinculacionPlanRequest> request);
         Task<VentaConfirmacionValidacionResponse> ValidarConfirmacionAsync(int ventaId);
         Task<VentaConfirmacionResponse> ConfirmarVentaAsync(int ventaId);
     }
