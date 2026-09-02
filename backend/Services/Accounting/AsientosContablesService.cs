@@ -111,7 +111,13 @@ namespace BudgetControl.Api.Services.Accounting
         public async Task<AsientoContableResponse> ReversarAsientoAsync(int id)
         {
             await using var transaction = await _db.Database.BeginTransactionAsync();
+            var saved = await ReversarAsientoEnTransaccionAsync(id);
+            await transaction.CommitAsync();
+            return saved;
+        }
 
+        public async Task<AsientoContableResponse> ReversarAsientoEnTransaccionAsync(int id)
+        {
             var asientoOriginal = await GetAsientoDetalleQuery()
                 .FirstOrDefaultAsync(a => a.Id == id);
 
@@ -157,7 +163,6 @@ namespace BudgetControl.Api.Services.Accounting
 
             _db.AsientosContables.Add(asientoReversion);
             await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
 
             var saved = await GetAsientoAsync(asientoReversion.Id);
             return saved!;

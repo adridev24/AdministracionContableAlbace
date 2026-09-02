@@ -30,6 +30,10 @@ const initialMedio = {
   observaciones: '',
 };
 
+const initialAnulacion = {
+  motivo: '',
+};
+
 const money = (value) => Number(value || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const getErrorMessage = (error) => error?.response?.data?.error || 'No se pudo completar la operacion.';
 const roundMoney = (value) => Math.round(Number(value || 0) * 100) / 100;
@@ -43,6 +47,8 @@ const CobranzasPage = () => {
   const [selectedCobranza, setSelectedCobranza] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [medioForm, setMedioForm] = useState(initialMedio);
+  const [anulacionForm, setAnulacionForm] = useState(initialAnulacion);
+  const [showAnulacionModal, setShowAnulacionModal] = useState(false);
   const [aplicacionesDraft, setAplicacionesDraft] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -230,9 +236,43 @@ const CobranzasPage = () => {
     }
   };
 
+  const openAnulacionModal = () => {
+    setAnulacionForm(initialAnulacion);
+    setError('');
+    setSuccess('');
+    setShowAnulacionModal(true);
+  };
+
+  const closeAnulacionModal = () => {
+    if (saving) return;
+    setShowAnulacionModal(false);
+    setAnulacionForm(initialAnulacion);
+  };
+
+  const handleAnular = async (event) => {
+    event.preventDefault();
+    if (!selectedCobranza) return;
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await cobranzasService.anular(selectedCobranza.id, { motivo: anulacionForm.motivo });
+      setSelectedCobranza(response.cobranza);
+      setShowAnulacionModal(false);
+      setAnulacionForm(initialAnulacion);
+      await loadCobranzas();
+      setSuccess(`Cobranza anulada. Asiento de reversion ${response.asientoReversionId}.`);
+    } catch (saveError) {
+      setError(getErrorMessage(saveError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const selectedMedio = mediosDisponibles.find((m) => String(m.id) === String(medioForm.medioPagoCobranzaId));
   const selectedMedioIsCheque = selectedMedio?.codigo === 'CHEQUE';
   const canEdit = selectedCobranza?.estado === 'Borrador';
+  const canAnular = selectedCobranza?.estado === 'Confirmada';
   const confirmDisabledReason = useMemo(() => {
     if (!selectedCobranza || !canEdit) return '';
     if (selectedCobranza.mediosPago.length === 0) return 'Debe cargar al menos un medio de pago.';
@@ -320,7 +360,7 @@ const CobranzasPage = () => {
                     <td>{cobranza.clienteNombre || cobranza.clienteExternoId}</td>
                     <td>{money(cobranza.importeTotal)}</td>
                     <td>{cobranza.monedaCodigo}</td>
-                    <td><span className={`status-pill ${cobranza.estado === 'Borrador' ? 'is-draft' : 'is-active'}`}>{cobranza.estado}</span></td>
+                    <td><span className={`status-pill ${cobranza.estado === 'Borrador' ? 'is-draft' : cobranza.estado === 'Anulada' ? 'is-inactive' : 'is-active'}`}>{cobranza.estado}</span></td>
                     <td>{cobranza.cantidadFacturasAplicadas}</td>
                     <td><button className="btn-secondary" type="button" onClick={() => handleSelect(cobranza.id)}>Abrir</button></td>
                   </tr>
@@ -334,10 +374,19 @@ const CobranzasPage = () => {
       {selectedCobranza && (
         <SectionCard
           title={`Cobranza ${selectedCobranza.id}`}
-          actions={canEdit && (
-            <button className="btn-primary" type="button" onClick={handleConfirmar} disabled={saving || Boolean(confirmDisabledReason)} title={confirmDisabledReason}>
-              Confirmar
-            </button>
+          actions={(
+            <>
+              {canEdit && (
+                <button className="btn-primary" type="button" onClick={handleConfirmar} disabled={saving || Boolean(confirmDisabledReason)} title={confirmDisabledReason}>
+                  Confirmar
+                </button>
+              )}
+              {canAnular && (
+                <button className="btn-secondary" type="button" onClick={openAnulacionModal} disabled={saving}>
+                  Anular
+                </button>
+              )}
+            </>
           )}
         >
           <div className="summary-grid">
@@ -347,8 +396,11 @@ const CobranzasPage = () => {
             <div><span>Aplicado</span><strong>{money(selectedCobranza.totalAplicado)}</strong></div>
             <div><span>Diferencia medios</span><strong>{money(diferenciaMedios)}</strong></div>
             <div><span>Diferencia aplicacion</span><strong>{money(diferenciaAplicaciones)}</strong></div>
+            {selectedCobranza.fechaAnulacion && <div><span>Fecha anulacion</span><strong>{String(selectedCobranza.fechaAnulacion).slice(0, 10)}</strong></div>}
+            {selectedCobranza.usuarioAnulacion && <div><span>Usuario anulacion</span><strong>{selectedCobranza.usuarioAnulacion}</strong></div>}
           </div>
           {confirmDisabledReason && <p className="form-warning">{confirmDisabledReason}</p>}
+          {selectedCobranza.motivoAnulacion && <p className="form-warning">{selectedCobranza.motivoAnulacion}</p>}
 
           {canEdit && (
             <form className="venta-form" onSubmit={handleAddMedio}>
@@ -548,6 +600,35 @@ const CobranzasPage = () => {
 
       {error && <p className="form-error">{error}</p>}
       {success && <p className="info-banner">{success}</p>}
+
+      {showAnulacionModal && (
+        <div className="modal-backdrop">
+          <form className="modal-card" onSubmit={handleAnular}>
+            <div className="modal-header">
+              <h2>Anular cobranza</h2>
+              <button className="modal-close" type="button" onClick={closeAnulacionModal} aria-label="Cerrar">x</button>
+            </div>
+            <div className="modal-body">
+              <p className="form-warning">La anulacion revertira los efectos de la cobranza en la cuenta corriente, el plan de pago y la contabilidad.</p>
+              <div className="form-field">
+                <label>Motivo</label>
+                <textarea
+                  value={anulacionForm.motivo}
+                  onChange={(event) => setAnulacionForm({ motivo: event.target.value })}
+                  required
+                  rows="4"
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" type="button" onClick={closeAnulacionModal} disabled={saving}>Cancelar</button>
+              <button className="btn-primary" type="submit" disabled={saving || !anulacionForm.motivo.trim()}>
+                {saving ? 'Anulando...' : 'Confirmar anulacion'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

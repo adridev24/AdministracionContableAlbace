@@ -29,6 +29,7 @@ const cobranzasService = {
   updateAplicacion: (id, aplicacionId, payload) => apiClient.put(`/api/cobranzas/${id}/aplicaciones/${aplicacionId}`, payload).then((res) => res.data),
   deleteAplicacion: (id, aplicacionId) => apiClient.delete(`/api/cobranzas/${id}/aplicaciones/${aplicacionId}`).then((res) => res.data),
   confirmar: (id) => apiClient.post(`/api/cobranzas/${id}/confirmar`).then((res) => res.data),
+  anular: (id, payload) => apiClient.post(`/api/cobranzas/${id}/anular`, payload).then((res) => res.data),
 };
 
 export default cobranzasService;

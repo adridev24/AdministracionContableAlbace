@@ -185,5 +185,18 @@ namespace BudgetControl.Api.Controllers.Collections
                 return BadRequest(new { error = ex.Message });
             }
         }
+
+        [HttpPost("{id}/anular")]
+        public async Task<IActionResult> AnularCobranza(int id, [FromBody] AnularCobranzaRequest request)
+        {
+            try
+            {
+                return Ok(await _service.AnularCobranzaAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
     }
 }

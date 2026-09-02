@@ -5,6 +5,7 @@ namespace BudgetControl.Api.Models.Collections
         EN_CARTERA,
         DEPOSITADO,
         ACREDITADO,
-        RECHAZADO
+        RECHAZADO,
+        ANULADO
     }
 }

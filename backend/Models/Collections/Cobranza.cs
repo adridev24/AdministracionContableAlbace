@@ -27,6 +27,9 @@ namespace BudgetControl.Api.Models.Collections
         public string? UsuarioModificacion { get; set; }
         public DateTime? FechaConfirmacion { get; set; }
         public string? UsuarioConfirmacion { get; set; }
+        public DateTime? FechaAnulacion { get; set; }
+        public string? UsuarioAnulacion { get; set; }
+        public string? MotivoAnulacion { get; set; }
         public int? AsientoContableId { get; set; }
 
         public ICollection<CobranzaMedioPago> MediosPago { get; set; } = new List<CobranzaMedioPago>();

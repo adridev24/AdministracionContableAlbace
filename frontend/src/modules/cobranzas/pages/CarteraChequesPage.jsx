@@ -183,6 +183,7 @@ const CarteraChequesPage = () => {
               <option value="DEPOSITADO">DEPOSITADO</option>
               <option value="ACREDITADO">ACREDITADO</option>
               <option value="RECHAZADO">RECHAZADO</option>
+              <option value="ANULADO">ANULADO</option>
             </select>
           </div>
           <div className="form-field">
@@ -257,7 +258,7 @@ const CarteraChequesPage = () => {
                     <td>{formatDate(cheque.fechaVencimiento)}</td>
                     <td>{money(cheque.importe)}</td>
                     <td>{cheque.monedaCodigo}</td>
-                    <td><span className="status-pill is-active">{cheque.estado}</span></td>
+                    <td><span className={`status-pill ${cheque.estado === 'ANULADO' ? 'is-inactive' : 'is-active'}`}>{cheque.estado}</span></td>
                     <td><button className="btn-secondary" type="button" onClick={() => handleSelect(cheque.id)}>Ver</button></td>
                   </tr>
                 ))}

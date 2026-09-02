@@ -60,4 +60,10 @@ namespace BudgetControl.Api.DTOs.Collections
         [Range(0.01, double.MaxValue)]
         public decimal ImporteAplicado { get; set; }
     }
+
+    public class AnularCobranzaRequest
+    {
+        [Required]
+        public string Motivo { get; set; } = null!;
+    }
 }

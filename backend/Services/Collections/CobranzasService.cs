@@ -16,12 +16,14 @@ namespace BudgetControl.Api.Services.Collections
         private const int MaxPageSize = 100;
         private const string CodigoOperacionCobranzaCliente = "COBRANZA_CLIENTE";
         private const string ModuloOrigenCobranzas = "COBRANZAS";
+        private const string TipoMovimientoAnulacionPrefix = "ANULACION_COBRANZA";
         private const string ConceptoClientes = "CLIENTES";
 
         private readonly AppDbContext _db;
         private readonly IUserContext _userContext;
         private readonly IExternalDataService _externalDataService;
         private readonly IContabilizacionAutomaticaService _contabilizacionAutomatica;
+        private readonly IAsientosContablesService _asientosContables;
         private readonly IConfiguracionesContablesService _configuracionesContables;
         private readonly ICarteraChequesService _carteraChequesService;
 
@@ -30,6 +32,7 @@ namespace BudgetControl.Api.Services.Collections
             IUserContext userContext,
             IExternalDataService externalDataService,
             IContabilizacionAutomaticaService contabilizacionAutomatica,
+            IAsientosContablesService asientosContables,
             IConfiguracionesContablesService configuracionesContables,
             ICarteraChequesService carteraChequesService)
         {
@@ -37,6 +40,7 @@ namespace BudgetControl.Api.Services.Collections
             _userContext = userContext;
             _externalDataService = externalDataService;
             _contabilizacionAutomatica = contabilizacionAutomatica;
+            _asientosContables = asientosContables;
             _configuracionesContables = configuracionesContables;
             _carteraChequesService = carteraChequesService;
         }
@@ -399,6 +403,51 @@ namespace BudgetControl.Api.Services.Collections
             };
         }
 
+        public async Task<CobranzaAnulacionResponse> AnularCobranzaAsync(int cobranzaId, AnularCobranzaRequest request)
+        {
+            var motivo = NormalizeRequired(request?.Motivo, "Debe indicar un motivo de anulacion.");
+
+            await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            var cobranza = await GetCobranzaForMutationAsync(cobranzaId);
+            EnsureConfirmadaParaAnular(cobranza);
+            ValidateChequesAnulables(cobranza);
+
+            if (!cobranza.AsientoContableId.HasValue)
+            {
+                throw new InvalidOperationException("La cobranza no posee asiento contable asociado para reversar.");
+            }
+
+            if (await _db.AsientosContables.AnyAsync(a => a.IdAsientoRevertido == cobranza.AsientoContableId.Value))
+            {
+                throw new InvalidOperationException("El asiento contable de la cobranza ya fue reversado. No se puede anular la cobranza automaticamente.");
+            }
+
+            var now = DateTime.UtcNow;
+            var movimientoIds = await EnsureMovimientosAnulacionCuentaCorrienteAsync(cobranza, now);
+
+            cobranza.Estado = CobranzaEstado.Anulada;
+            cobranza.FechaAnulacion = now;
+            cobranza.UsuarioAnulacion = _userContext.UserName;
+            cobranza.MotivoAnulacion = motivo;
+            cobranza.FechaModificacion = now;
+            cobranza.UsuarioModificacion = _userContext.UserName;
+
+            await RecalcularCuotasAfectadasAsync(cobranza);
+            var asientoReversion = await _asientosContables.ReversarAsientoEnTransaccionAsync(cobranza.AsientoContableId.Value);
+            var chequesAnulados = MarcarChequesEnCarteraComoAnulados(cobranza, now);
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return new CobranzaAnulacionResponse
+            {
+                Cobranza = (await GetCobranzaAsync(cobranzaId))!,
+                AsientoReversionId = asientoReversion.Id,
+                MovimientosCuentaCorrienteIds = movimientoIds,
+                ChequesAnulados = chequesAnulados
+            };
+        }
+
         private async Task<Cobranza> GetCobranzaForMutationAsync(int cobranzaId)
         {
             var cobranza = await GetCobranzaQuery(true).FirstOrDefaultAsync(c => c.Id == cobranzaId);
@@ -411,6 +460,8 @@ namespace BudgetControl.Api.Services.Collections
             var query = _db.Cobranzas
                 .Include(c => c.MediosPago)
                     .ThenInclude(m => m.MedioPago)
+                .Include(c => c.MediosPago)
+                    .ThenInclude(m => m.ChequeTercero)
                 .Include(c => c.MediosPago)
                     .ThenInclude(m => m.BancoCatalogo)
                 .Include(c => c.AplicacionesFactura)
@@ -588,6 +639,121 @@ namespace BudgetControl.Api.Services.Collections
             }
 
             return ids;
+        }
+
+        private async Task<List<int>> EnsureMovimientosAnulacionCuentaCorrienteAsync(Cobranza cobranza, DateTime fechaAnulacion)
+        {
+            var ids = new List<int>();
+            foreach (var aplicacion in cobranza.AplicacionesFactura)
+            {
+                var tipoMovimiento = BuildTipoMovimientoAnulacionCobranza(aplicacion.VentaId);
+                var idOrigen = cobranza.Id.ToString();
+                var existing = await _db.VentasMovimientosCuentaCorriente.FirstOrDefaultAsync(m =>
+                    m.ModuloOrigen == ModuloOrigenCobranzas &&
+                    m.IdOrigen == idOrigen &&
+                    m.TipoMovimiento == tipoMovimiento);
+                if (existing != null)
+                {
+                    ids.Add(existing.Id);
+                    continue;
+                }
+
+                var movimiento = new VentaMovimientoCuentaCorriente
+                {
+                    ClienteExternoId = cobranza.ClienteExternoId,
+                    ObraExternaId = aplicacion.Venta.ObraExternaId,
+                    Fecha = fechaAnulacion,
+                    TipoMovimiento = tipoMovimiento,
+                    Debe = aplicacion.ImporteAplicado,
+                    Haber = 0,
+                    ModuloOrigen = ModuloOrigenCobranzas,
+                    IdOrigen = idOrigen,
+                    Descripcion = $"Anulacion cobranza {cobranza.Id} aplicada a factura {BuildComprobante(aplicacion.Venta)}",
+                    FechaAlta = fechaAnulacion,
+                    UsuarioAlta = _userContext.UserName
+                };
+                _db.VentasMovimientosCuentaCorriente.Add(movimiento);
+                await _db.SaveChangesAsync();
+                ids.Add(movimiento.Id);
+            }
+
+            return ids;
+        }
+
+        private async Task RecalcularCuotasAfectadasAsync(Cobranza cobranza)
+        {
+            var cuotaIds = cobranza.AplicacionesFactura
+                .SelectMany(a => a.AplicacionesObligacion)
+                .Select(a => a.CuotaComercialId)
+                .Distinct()
+                .ToList();
+
+            if (!cuotaIds.Any()) return;
+
+            var importesConfirmados = await _db.CobranzasAplicacionesObligacion
+                .AsNoTracking()
+                .Where(a => cuotaIds.Contains(a.CuotaComercialId) &&
+                    a.AplicacionFactura.CobranzaId != cobranza.Id &&
+                    a.AplicacionFactura.Cobranza.Estado == CobranzaEstado.Confirmada)
+                .GroupBy(a => a.CuotaComercialId)
+                .Select(g => new { CuotaId = g.Key, Importe = g.Sum(a => a.ImporteAplicado) })
+                .ToDictionaryAsync(g => g.CuotaId, g => g.Importe);
+
+            var cuotas = await _db.CuotasComerciales
+                .Where(c => cuotaIds.Contains(c.Id))
+                .ToListAsync();
+
+            foreach (var cuota in cuotas)
+            {
+                importesConfirmados.TryGetValue(cuota.Id, out var importePagado);
+                cuota.ImportePagado = RoundMoney(importePagado);
+                cuota.SaldoPendiente = Math.Max(RoundMoney(cuota.ImporteOriginal - cuota.ImportePagado), 0);
+                UpdateCuotaEstado(cuota);
+            }
+        }
+
+        private static void ValidateChequesAnulables(Cobranza cobranza)
+        {
+            var cheques = cobranza.MediosPago
+                .Select(m => m.ChequeTercero)
+                .Where(c => c != null)
+                .Select(c => c!)
+                .ToList();
+
+            if (cheques.Any(c => c.Estado == ChequeTerceroEstado.DEPOSITADO))
+            {
+                throw new InvalidOperationException("La cobranza no puede anularse porque contiene uno o mas cheques depositados.");
+            }
+
+            if (cheques.Any(c => c.Estado == ChequeTerceroEstado.ACREDITADO))
+            {
+                throw new InvalidOperationException("La cobranza no puede anularse porque contiene uno o mas cheques acreditados.");
+            }
+
+            if (cheques.Any(c => c.Estado == ChequeTerceroEstado.RECHAZADO))
+            {
+                throw new InvalidOperationException("La cobranza no puede anularse porque contiene uno o mas cheques rechazados.");
+            }
+
+            if (cheques.Any(c => c.Estado == ChequeTerceroEstado.ANULADO))
+            {
+                throw new InvalidOperationException("La cobranza no puede anularse porque contiene uno o mas cheques ya anulados.");
+            }
+        }
+
+        private int MarcarChequesEnCarteraComoAnulados(Cobranza cobranza, DateTime fechaAnulacion)
+        {
+            var count = 0;
+            foreach (var cheque in cobranza.MediosPago.Select(m => m.ChequeTercero).Where(c => c != null).Select(c => c!))
+            {
+                if (cheque.Estado != ChequeTerceroEstado.EN_CARTERA) continue;
+                cheque.Estado = ChequeTerceroEstado.ANULADO;
+                cheque.FechaModificacion = fechaAnulacion;
+                cheque.UsuarioModificacion = _userContext.UserName;
+                count++;
+            }
+
+            return count;
         }
 
         private async Task<SolicitudContabilizacionAutomaticaRequest> BuildSolicitudContableAsync(Cobranza cobranza)
@@ -789,6 +955,9 @@ namespace BudgetControl.Api.Services.Collections
                 UsuarioModificacion = cobranza.UsuarioModificacion,
                 FechaConfirmacion = cobranza.FechaConfirmacion,
                 UsuarioConfirmacion = cobranza.UsuarioConfirmacion,
+                FechaAnulacion = cobranza.FechaAnulacion,
+                UsuarioAnulacion = cobranza.UsuarioAnulacion,
+                MotivoAnulacion = cobranza.MotivoAnulacion,
                 AsientoContableId = cobranza.AsientoContableId,
                 TotalMedios = cobranza.MediosPago.Sum(m => m.Importe),
                 TotalAplicado = cobranza.AplicacionesFactura.Sum(a => a.ImporteAplicado),
@@ -913,6 +1082,19 @@ namespace BudgetControl.Api.Services.Collections
             }
         }
 
+        private static void EnsureConfirmadaParaAnular(Cobranza cobranza)
+        {
+            if (cobranza.Estado == CobranzaEstado.Anulada)
+            {
+                throw new InvalidOperationException("La cobranza ya se encuentra anulada.");
+            }
+
+            if (cobranza.Estado != CobranzaEstado.Confirmada)
+            {
+                throw new InvalidOperationException("Solo puede anularse una cobranza Confirmada.");
+            }
+        }
+
         private static void UpdateCuotaEstado(CuotaComercial cuota)
         {
             if (cuota.Estado == CuotaEstado.Anulada) return;
@@ -933,6 +1115,11 @@ namespace BudgetControl.Api.Services.Collections
         private static string BuildTipoMovimientoCobranza(int ventaId)
         {
             return $"COBRANZA:{ventaId}";
+        }
+
+        private static string BuildTipoMovimientoAnulacionCobranza(int ventaId)
+        {
+            return $"{TipoMovimientoAnulacionPrefix}:{ventaId}";
         }
 
         private static decimal RoundMoney(decimal value)

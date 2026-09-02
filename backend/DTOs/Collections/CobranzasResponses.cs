@@ -49,6 +49,9 @@ namespace BudgetControl.Api.DTOs.Collections
         public string? UsuarioModificacion { get; set; }
         public DateTime? FechaConfirmacion { get; set; }
         public string? UsuarioConfirmacion { get; set; }
+        public DateTime? FechaAnulacion { get; set; }
+        public string? UsuarioAnulacion { get; set; }
+        public string? MotivoAnulacion { get; set; }
         public int? AsientoContableId { get; set; }
         public decimal TotalMedios { get; set; }
         public decimal TotalAplicado { get; set; }
@@ -132,5 +135,13 @@ namespace BudgetControl.Api.DTOs.Collections
         public decimal TotalAplicadoFacturas { get; set; }
         public decimal TotalMediosCancelacion { get; set; }
         public int MovimientoCuentaCorrienteId { get; set; }
+    }
+
+    public class CobranzaAnulacionResponse
+    {
+        public CobranzaResponse Cobranza { get; set; } = null!;
+        public int? AsientoReversionId { get; set; }
+        public List<int> MovimientosCuentaCorrienteIds { get; set; } = new();
+        public int ChequesAnulados { get; set; }
     }
 }

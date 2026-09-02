@@ -1053,6 +1053,9 @@ namespace BudgetControl.Api.Data
                 entity.Property(e => e.UsuarioModificacion).HasColumnName("usuario_modificacion").HasMaxLength(100);
                 entity.Property(e => e.FechaConfirmacion).HasColumnName("fecha_confirmacion");
                 entity.Property(e => e.UsuarioConfirmacion).HasColumnName("usuario_confirmacion").HasMaxLength(100);
+                entity.Property(e => e.FechaAnulacion).HasColumnName("fecha_anulacion");
+                entity.Property(e => e.UsuarioAnulacion).HasColumnName("usuario_anulacion").HasMaxLength(100);
+                entity.Property(e => e.MotivoAnulacion).HasColumnName("motivo_anulacion").HasMaxLength(1000);
                 entity.Property(e => e.AsientoContableId).HasColumnName("asiento_contable_id");
 
                 entity.HasIndex(e => e.ClienteExternoId)

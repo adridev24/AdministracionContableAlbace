@@ -8,6 +8,7 @@ namespace BudgetControl.Api.Services.Accounting
         Task<AsientoContableResponse?> GetAsientoAsync(int id);
         Task<AsientoContableResponse> CrearAsientoManualAsync(CrearAsientoContableRequest request);
         Task<AsientoContableResponse> ReversarAsientoAsync(int id);
+        Task<AsientoContableResponse> ReversarAsientoEnTransaccionAsync(int id);
         Task<AsientoContableResponse> GenerarAsientoAutomaticoAsync(
             string moduloOrigen,
             string idOrigen,

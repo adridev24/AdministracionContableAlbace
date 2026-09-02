@@ -19,5 +19,6 @@ namespace BudgetControl.Api.Services.Collections
         Task<CobranzaResponse> UpdateAplicacionFacturaAsync(int cobranzaId, int aplicacionId, CobranzaAplicacionFacturaRequest request);
         Task<CobranzaResponse> DeleteAplicacionFacturaAsync(int cobranzaId, int aplicacionId);
         Task<CobranzaConfirmacionResponse> ConfirmarCobranzaAsync(int cobranzaId);
+        Task<CobranzaAnulacionResponse> AnularCobranzaAsync(int cobranzaId, AnularCobranzaRequest request);
     }
 }
