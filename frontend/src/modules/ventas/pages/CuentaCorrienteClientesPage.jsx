@@ -167,11 +167,23 @@ const CuentaCorrienteClientesPage = () => {
               <div className="cc-saldo-grid">
                 {cuenta.saldosPorMoneda.map((saldo) => (
                   <div className="cc-saldo-card" key={saldo.monedaCodigo}>
-                    <strong>{saldo.monedaCodigo}</strong>
-                    <span>Saldo anterior {money(saldo.saldoAnterior)}</span>
-                    <span>Debe periodo {money(saldo.debePeriodo)}</span>
-                    <span>Haber periodo {money(saldo.haberPeriodo)}</span>
-                    <em>Saldo final {money(saldo.saldoFinal)}</em>
+                    <strong className="cc-saldo-moneda">{saldo.monedaCodigo}</strong>
+                    <div className="cc-saldo-row">
+                      <span>Saldo anterior</span>
+                      <b>{money(saldo.saldoAnterior)}</b>
+                    </div>
+                    <div className="cc-saldo-row">
+                      <span>Debe periodo</span>
+                      <b>{money(saldo.debePeriodo)}</b>
+                    </div>
+                    <div className="cc-saldo-row">
+                      <span>Haber periodo</span>
+                      <b>{money(saldo.haberPeriodo)}</b>
+                    </div>
+                    <div className="cc-saldo-row is-final">
+                      <span>Saldo final</span>
+                      <b>{money(saldo.saldoFinal)}</b>
+                    </div>
                   </div>
                 ))}
               </div>
