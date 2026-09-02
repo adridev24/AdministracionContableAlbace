@@ -139,6 +139,10 @@ const VentasHomePage = () => {
             <strong>Cobranzas</strong>
             <span>Cancelacion efectiva de facturas confirmadas de Via 1.</span>
           </Link>
+          <Link className="module-menu-item" to="/ventas/cuenta-corriente">
+            <strong>Cuenta corriente</strong>
+            <span>Saldos, movimientos y facturas por cliente y moneda.</span>
+          </Link>
         </div>
       </SectionCard>
 
