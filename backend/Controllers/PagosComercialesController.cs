@@ -59,6 +59,19 @@ namespace BudgetControl.Api.Controllers
             }
         }
 
+        [HttpPost("{id}/anular")]
+        public async Task<IActionResult> Anular(int id, [FromBody] AnularPagoComercialRequest request)
+        {
+            try
+            {
+                return Ok(await _service.AnularPagoAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpGet("cuota/{cuotaId}/aplicaciones")]
         public async Task<IActionResult> GetAplicacionesPorCuota(int cuotaId)
         {
@@ -66,6 +79,10 @@ namespace BudgetControl.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public IActionResult GetById(int id) => NoContent();
+        public async Task<IActionResult> GetById(int id)
+        {
+            var pago = await _service.GetPagoAsync(id);
+            return pago == null ? NotFound() : Ok(pago);
+        }
     }
 }

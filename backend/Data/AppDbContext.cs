@@ -211,6 +211,9 @@ namespace BudgetControl.Api.Data
                 entity.Property(e => e.Estado).HasColumnName("estado");
                 entity.Property(e => e.FechaAlta).HasColumnName("fecha_alta");
                 entity.Property(e => e.UsuarioAlta).HasColumnName("usuario_alta");
+                entity.Property(e => e.FechaAnulacion).HasColumnName("fecha_anulacion");
+                entity.Property(e => e.UsuarioAnulacion).HasColumnName("usuario_anulacion");
+                entity.Property(e => e.MotivoAnulacion).HasColumnName("motivo_anulacion");
 
                 entity.HasOne(e => e.AcuerdoComercial)
                     .WithMany(a => a.Pagos)

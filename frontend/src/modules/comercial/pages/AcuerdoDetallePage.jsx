@@ -9,7 +9,9 @@ import CuotasComercialesTable from '../components/CuotasComercialesTable';
 import AjusteCuotaModal from '../components/AjusteCuotaModal';
 import AgregarCuotaModal from '../components/AgregarCuotaModal';
 import SituacionVia1Panel from '../components/SituacionVia1Panel';
+import PagoComercialForm from '../components/PagoComercialForm';
 import useAcuerdoDetalle from '../hooks/useAcuerdoDetalle';
+import usePagosComerciales from '../hooks/usePagosComerciales';
 import acuerdosService from '../services/acuerdosService';
 import externalDataService from '../services/externalDataService';
 import '../comercial.css';
@@ -21,6 +23,19 @@ const formatDate = (value) => {
   if (!value) return '-';
   const [year, month, day] = String(value).slice(0, 10).split('-');
   return year && month && day ? `${day}/${month}/${year}` : '-';
+};
+
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 
 const summarizeVias = (vias) => {
@@ -59,12 +74,24 @@ const AcuerdoDetallePage = () => {
   const [hitoForm, setHitoForm] = useState({ descripcion: '', importeEstimado: '', fechaReferencia: '', observaciones: '' });
   const [hitoLoading, setHitoLoading] = useState(false);
   const [aprobarLoading, setAprobarLoading] = useState(false);
+  const [pagoFormOpen, setPagoFormOpen] = useState(false);
+  const [anulandoPagoId, setAnulandoPagoId] = useState(null);
+  const {
+    loading: pagoLoading,
+    error: pagoError,
+    success: pagoSuccess,
+    registerPago,
+    anularPago,
+    setError: setPagoError,
+    setSuccess: setPagoSuccess
+  } = usePagosComerciales();
 
   const vias = detalle?.vias ?? [];
   const selectedVia = vias.find((via) => via.id === selectedViaId) ?? vias[0];
   const isBorrador = detalle?.estado === 'Borrador' && selectedVia?.estado === 'Borrador';
   const canAgregarCuota = selectedVia?.planPago && ['Aprobado', 'EnCurso'].includes(selectedVia?.estado);
   const viasPlanificadasSinPlan = vias.filter((via) => via.modalidadCobro === 'Planificada' && !via.planPago);
+  const canCreatePlanForSelectedVia = selectedVia && !(selectedVia.viaOperacion === 'Via2' && selectedVia.modalidadCobro === 'Abierta');
 
   useEffect(() => {
     if (vias.length && !selectedViaId) {
@@ -238,6 +265,33 @@ const AcuerdoDetallePage = () => {
     }
   };
 
+  const handleRegistrarPago = async (payload) => {
+    setPagoError('');
+    setPagoSuccess('');
+    try {
+      await registerPago(payload);
+      await refreshDetalle();
+      setPagoFormOpen(false);
+    } catch (_) {}
+  };
+
+  const handleAnularPago = async (pago) => {
+    const motivo = window.prompt(`Motivo de anulacion del pago ${currency(pago.importeTotal, pago.monedaCodigo)} del ${formatDate(pago.fechaPago)}:`);
+    if (!motivo || !motivo.trim()) return;
+    if (!window.confirm('Confirmar anulacion del pago comercial. El pago seguira visible y dejara de computar en el saldo.')) return;
+
+    setAnulandoPagoId(pago.id);
+    setPagoError('');
+    setPagoSuccess('');
+    try {
+      await anularPago(pago.id, { motivo: motivo.trim() });
+      await refreshDetalle();
+    } catch (_) {
+    } finally {
+      setAnulandoPagoId(null);
+    }
+  };
+
   const handleAprobarAcuerdo = async () => {
     if (viasPlanificadasSinPlan.length) {
       setPlanError(`No se puede aprobar el acuerdo. Cree el plan de pago para: ${viasPlanificadasSinPlan.map((via) => via.viaOperacion).join(', ')}.`);
@@ -364,7 +418,7 @@ const AcuerdoDetallePage = () => {
             </SectionCard>
           )}
 
-          {!selectedVia.planPago ? (
+          {!selectedVia.planPago && canCreatePlanForSelectedVia ? (
             <SectionCard title="Generar plan de pago" description={`Esta creando el plan de pago para ${selectedVia.viaOperacion} - ${selectedVia.monedaCodigo}.`}>
               {isBorrador ? (
                 <PlanPagoForm onSubmit={handleCreatePlan} loading={planLoading} />
@@ -372,7 +426,7 @@ const AcuerdoDetallePage = () => {
                 <p className="empty-state">El acuerdo ya fue aprobado. No se puede crear un plan base nuevo.</p>
               )}
             </SectionCard>
-          ) : (
+          ) : selectedVia.planPago ? (
             <SectionCard
               title="Plan de pago"
               description={isBorrador
@@ -395,6 +449,38 @@ const AcuerdoDetallePage = () => {
               />
               <CuotasComercialesTable cuotas={selectedVia.planPago.cuotas} />
             </SectionCard>
+          ) : null}
+
+          {selectedVia.viaOperacion === 'Via2' && (
+            <SectionCard
+              title="Pagos Via2"
+              description="Carga directa de pagos comerciales sin facturacion ni cobranza formal."
+              actions={(
+                <button className="btn-primary" type="button" onClick={() => setPagoFormOpen((prev) => !prev)}>
+                  {pagoFormOpen ? 'Cerrar' : 'Registrar pago'}
+                </button>
+              )}
+            >
+              <div className="info-grid">
+                <div><strong>Moneda</strong><p>{selectedVia.monedaCodigo}</p></div>
+                <div><strong>Monto acordado</strong><p>{currency(selectedVia.montoActual, selectedVia.monedaCodigo)}</p></div>
+                <div><strong>Pagado</strong><p>{currency(selectedVia.totalPagado, selectedVia.monedaCodigo)}</p></div>
+                <div><strong>Saldo</strong><p>{currency(selectedVia.saldoPendiente, selectedVia.monedaCodigo)}</p></div>
+              </div>
+
+              {pagoFormOpen && (
+                <PagoComercialForm
+                  acuerdo={detalle}
+                  initialViaId={selectedVia.id}
+                  lockVia
+                  onSubmit={handleRegistrarPago}
+                  loading={pagoLoading}
+                  error={pagoError}
+                />
+              )}
+              {pagoSuccess && <p className="form-success">{pagoSuccess}</p>}
+              {pagoError && !pagoFormOpen && <p className="form-error">{pagoError}</p>}
+            </SectionCard>
           )}
 
           <SectionCard title="Pagos aplicados" description="Pagos comerciales registrados para esta via.">
@@ -410,7 +496,12 @@ const AcuerdoDetallePage = () => {
                       <th>Importe total</th>
                       <th>Medio</th>
                       <th>Estado</th>
+                      <th>Alta</th>
+                      <th>Usuario</th>
+                      <th>Observaciones</th>
                       <th>Aplicado</th>
+                      <th>Aplicaciones</th>
+                      <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -419,8 +510,38 @@ const AcuerdoDetallePage = () => {
                         <td>{formatDate(pago.fechaPago)}</td>
                         <td>{currency(pago.importeTotal, pago.monedaCodigo)}</td>
                         <td>{pago.medioPago}</td>
-                        <td>{pago.origenPago} / {pago.tipoImputacion}</td>
-                        <td>{currency(pago.aplicaciones.reduce((sum, app) => sum + app.importeAplicado, 0), pago.monedaCodigo)}</td>
+                        <td>{pago.estado} / {pago.tipoImputacion}</td>
+                        <td>{formatDateTime(pago.fechaAlta)}</td>
+                        <td>{pago.usuarioAlta || '-'}</td>
+                        <td>
+                          {pago.observaciones || '-'}
+                          {pago.estado === 'Anulado' && (
+                            <small className="table-note">
+                              Anulado: {formatDateTime(pago.fechaAnulacion)} - {pago.usuarioAnulacion || '-'} - {pago.motivoAnulacion || '-'}
+                            </small>
+                          )}
+                        </td>
+                        <td>{currency(pago.estado === 'Anulado' ? 0 : (pago.aplicaciones || []).reduce((sum, app) => sum + app.importeAplicado, 0), pago.monedaCodigo)}</td>
+                        <td>
+                          {pago.aplicaciones?.length ? (
+                            <small className="table-note">
+                              {pago.estado === 'Anulado' ? 'Original: ' : ''}
+                              {pago.aplicaciones.map((app) => `${app.tipoImputacion}: ${currency(app.importeAplicado, pago.monedaCodigo)}`).join(' / ')}
+                            </small>
+                          ) : '-'}
+                        </td>
+                        <td>
+                          {selectedVia.viaOperacion === 'Via2' && pago.estado !== 'Anulado' ? (
+                            <button
+                              className="btn-secondary"
+                              type="button"
+                              onClick={() => handleAnularPago(pago)}
+                              disabled={anulandoPagoId === pago.id}
+                            >
+                              {anulandoPagoId === pago.id ? 'Anulando...' : 'Anular'}
+                            </button>
+                          ) : '-'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

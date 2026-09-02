@@ -176,6 +176,9 @@ namespace BudgetControl.Api.DTOs.Commercial
         public PagoEstado Estado { get; set; }
         public DateTime FechaAlta { get; set; }
         public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaAnulacion { get; set; }
+        public string? UsuarioAnulacion { get; set; }
+        public string? MotivoAnulacion { get; set; }
         public List<AplicacionPagoResponse> Aplicaciones { get; set; } = new();
     }
 

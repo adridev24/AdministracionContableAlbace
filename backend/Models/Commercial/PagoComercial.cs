@@ -24,6 +24,9 @@ namespace BudgetControl.Api.Models.Commercial
         public PagoEstado Estado { get; set; }
         public DateTime FechaAlta { get; set; }
         public string UsuarioAlta { get; set; } = null!;
+        public DateTime? FechaAnulacion { get; set; }
+        public string? UsuarioAnulacion { get; set; }
+        public string? MotivoAnulacion { get; set; }
 
         public AcuerdoComercial AcuerdoComercial { get; set; } = null!;
         public AcuerdoComercialVia AcuerdoComercialVia { get; set; } = null!;

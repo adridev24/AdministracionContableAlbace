@@ -191,6 +191,12 @@ namespace BudgetControl.Api.DTOs.Commercial
         public List<AplicacionPagoRequest> Aplicaciones { get; set; } = new();
     }
 
+    public class AnularPagoComercialRequest
+    {
+        [Required]
+        public string Motivo { get; set; } = null!;
+    }
+
     public class CreateHitoComercialRequest
     {
         [Required]

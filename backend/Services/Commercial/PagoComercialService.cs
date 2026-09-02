@@ -122,10 +122,83 @@ namespace BudgetControl.Api.Services.Commercial
             return MapPago(await AplicarPagoInternoAsync(pago, request.Aplicaciones));
         }
 
+        public async Task<PagoComercialResponse?> GetPagoAsync(int pagoId)
+        {
+            var pago = await GetPagoQuery()
+                .FirstOrDefaultAsync(p => p.Id == pagoId);
+
+            return pago == null ? null : MapPago(pago);
+        }
+
+        public async Task<PagoComercialResponse> AnularPagoAsync(int pagoId, AnularPagoComercialRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Motivo))
+            {
+                throw new InvalidOperationException("Debe indicar un motivo de anulacion.");
+            }
+
+            var pago = await GetPagoQuery()
+                .FirstOrDefaultAsync(p => p.Id == pagoId);
+
+            if (pago == null)
+            {
+                throw new InvalidOperationException("Pago comercial no encontrado.");
+            }
+
+            if (pago.AcuerdoComercialVia.ViaOperacion != ViaOperacion.Via2)
+            {
+                throw new InvalidOperationException("Solo se pueden anular pagos comerciales de Via2 desde este circuito.");
+            }
+
+            if (pago.Estado == PagoEstado.Anulado)
+            {
+                throw new InvalidOperationException("El pago ya se encuentra anulado.");
+            }
+
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+
+            foreach (var aplicacion in pago.Aplicaciones)
+            {
+                if (aplicacion.HitoComercialVia != null)
+                {
+                    aplicacion.HitoComercialVia.ImporteAplicado = Math.Max(aplicacion.HitoComercialVia.ImporteAplicado - aplicacion.ImporteAplicado, 0);
+                    aplicacion.HitoComercialVia.Estado = aplicacion.HitoComercialVia.ImporteAplicado <= 0
+                        ? HitoEstado.Pendiente
+                        : aplicacion.HitoComercialVia.ImporteEstimado > 0 && aplicacion.HitoComercialVia.ImporteAplicado >= aplicacion.HitoComercialVia.ImporteEstimado
+                            ? HitoEstado.Cumplido
+                            : HitoEstado.Parcial;
+                }
+
+                if (aplicacion.CuotaComercial != null)
+                {
+                    var cuotaVia = aplicacion.CuotaComercial.PlanPago.AcuerdoComercialVia;
+                    if (cuotaVia.ViaOperacion != ViaOperacion.Via2 || cuotaVia.Id != pago.AcuerdoComercialViaId)
+                    {
+                        throw new InvalidOperationException("La aplicacion a cuota no pertenece a la misma Via2 del pago.");
+                    }
+
+                    aplicacion.CuotaComercial.ImportePagado = Math.Max(aplicacion.CuotaComercial.ImportePagado - aplicacion.ImporteAplicado, 0);
+                    aplicacion.CuotaComercial.SaldoPendiente = Math.Min(aplicacion.CuotaComercial.SaldoPendiente + aplicacion.ImporteAplicado, aplicacion.CuotaComercial.ImporteOriginal);
+                    UpdateCuotaEstado(aplicacion.CuotaComercial);
+                }
+            }
+
+            pago.Estado = PagoEstado.Anulado;
+            pago.FechaAnulacion = DateTime.UtcNow;
+            pago.UsuarioAnulacion = _userContext.UserName;
+            pago.MotivoAnulacion = request.Motivo.Trim();
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return MapPago(pago);
+        }
+
         public async Task<IEnumerable<AplicacionPagoResponse>> GetAplicacionesPorCuotaAsync(int cuotaId)
         {
             var aplicaciones = await _db.AplicacionesPagoComerciales
-                .Where(a => a.CuotaComercialId == cuotaId)
+                .Include(a => a.PagoComercial)
+                .Where(a => a.CuotaComercialId == cuotaId && a.PagoComercial.Estado != PagoEstado.Anulado)
                 .ToListAsync();
 
             return aplicaciones.Select(MapAplicacion).ToList();
@@ -279,6 +352,18 @@ namespace BudgetControl.Api.Services.Commercial
             return DateTime.SpecifyKind(value, DateTimeKind.Utc);
         }
 
+        private IQueryable<PagoComercial> GetPagoQuery()
+        {
+            return _db.PagosComerciales
+                .Include(p => p.AcuerdoComercialVia)
+                .Include(p => p.Aplicaciones)
+                    .ThenInclude(a => a.HitoComercialVia)
+                .Include(p => p.Aplicaciones)
+                    .ThenInclude(a => a.CuotaComercial)
+                        .ThenInclude(c => c!.PlanPago)
+                            .ThenInclude(pp => pp.AcuerdoComercialVia);
+        }
+
         private static PagoComercialResponse MapPago(PagoComercial pago)
         {
             return new PagoComercialResponse
@@ -298,6 +383,9 @@ namespace BudgetControl.Api.Services.Commercial
                 Estado = pago.Estado,
                 FechaAlta = pago.FechaAlta,
                 UsuarioAlta = pago.UsuarioAlta,
+                FechaAnulacion = pago.FechaAnulacion,
+                UsuarioAnulacion = pago.UsuarioAnulacion,
+                MotivoAnulacion = pago.MotivoAnulacion,
                 Aplicaciones = pago.Aplicaciones.OrderBy(a => a.Id).Select(MapAplicacion).ToList()
             };
         }

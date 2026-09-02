@@ -236,6 +236,15 @@
   background: #f8fbff;
 }
 
+.table-note {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  margin-top: 4px;
+  max-width: 360px;
+}
+
   .btn-small {
     padding: 8px 12px;
     font-size: 0.9rem;

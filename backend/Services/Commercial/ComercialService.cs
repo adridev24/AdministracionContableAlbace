@@ -206,6 +206,11 @@ namespace BudgetControl.Api.Services.Commercial
                 throw new InvalidOperationException("La vía ya tiene un plan de pago asociado.");
             }
 
+            if (via.ViaOperacion == ViaOperacion.Via2 && via.ModalidadCobro == ModalidadCobro.Abierta)
+            {
+                throw new InvalidOperationException("Una Via2 abierta no requiere ni permite generar plan de pago.");
+            }
+
             if (via.Estado != AcuerdoEstado.Borrador)
             {
                 throw new InvalidOperationException("El plan base solo puede crearse antes de aprobar el acuerdo.");
@@ -1602,6 +1607,9 @@ namespace BudgetControl.Api.Services.Commercial
                 Estado = pago.Estado,
                 FechaAlta = pago.FechaAlta,
                 UsuarioAlta = pago.UsuarioAlta,
+                FechaAnulacion = pago.FechaAnulacion,
+                UsuarioAnulacion = pago.UsuarioAnulacion,
+                MotivoAnulacion = pago.MotivoAnulacion,
                 Aplicaciones = pago.Aplicaciones.OrderBy(a => a.Id).Select(a => new AplicacionPagoResponse
                 {
                     Id = a.Id,

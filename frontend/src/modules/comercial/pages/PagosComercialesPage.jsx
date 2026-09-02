@@ -37,16 +37,9 @@ const PagosComercialesPage = () => {
   const handleSubmitPago = async (payload) => {
     setError('');
     try {
-      const pago = await registerPago(payload);
-      setAcuerdo((prev) => ({
-        ...prev,
-        pagos: [...(prev?.pagos || []), pago],
-        vias: (prev?.vias || []).map((via) =>
-          via.id === payload.acuerdoComercialViaId
-            ? { ...via, pagos: [...(via.pagos || []), pago] }
-            : via
-        )
-      }));
+      await registerPago(payload);
+      const data = await acuerdosService.getAcuerdoDetalle(payload.acuerdoComercialId);
+      setAcuerdo(data);
     } catch (_) {}
   };
 

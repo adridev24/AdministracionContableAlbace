@@ -6,6 +6,8 @@ namespace BudgetControl.Api.Services.Commercial
     {
         Task<PagoComercialResponse> RegistrarPagoAsync(CreatePagoComercialRequest request);
         Task<PagoComercialResponse> AplicarPagoAsync(int pagoId, AplicarPagoRequest request);
+        Task<PagoComercialResponse?> GetPagoAsync(int pagoId);
+        Task<PagoComercialResponse> AnularPagoAsync(int pagoId, AnularPagoComercialRequest request);
         Task<IEnumerable<AplicacionPagoResponse>> GetAplicacionesPorCuotaAsync(int cuotaId);
     }
 }

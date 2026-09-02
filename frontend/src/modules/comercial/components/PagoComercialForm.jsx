@@ -2,22 +2,23 @@ import React, { useEffect, useState } from 'react';
 import AplicacionPagoForm from './AplicacionPagoForm';
 
 const imputaciones = [
-  { value: 'SaldoGeneral', label: 'Saldo general' },
-  { value: 'PagoParcial', label: 'Pago parcial' },
   { value: 'Anticipo', label: 'Anticipo' },
+  { value: 'SaldoGeneral', label: 'Pago' },
+  { value: 'PagoParcial', label: 'Pago parcial' },
   { value: 'Hito', label: 'Hito' },
   { value: 'Cuota', label: 'Cuota' },
 ];
 
-const PagoComercialForm = ({ acuerdo, onSubmit, loading, error }) => {
+const PagoComercialForm = ({ acuerdo, onSubmit, loading, error, initialViaId = null, lockVia = false }) => {
   const vias = (acuerdo?.vias || []).filter((via) => via.viaOperacion === 'Via2');
-  const firstViaId = vias[0]?.id ? String(vias[0].id) : '';
+  const initialVia = vias.find((via) => String(via.id) === String(initialViaId)) || vias[0];
+  const firstViaId = initialVia?.id ? String(initialVia.id) : '';
   const [form, setForm] = useState({
     clienteExternoId: acuerdo?.clienteExternoId || '',
     obraExternaId: acuerdo?.obraExternaId || '',
     acuerdoComercialId: acuerdo?.id || '',
     acuerdoComercialViaId: firstViaId,
-    monedaCodigo: vias[0]?.monedaCodigo || '',
+    monedaCodigo: initialVia?.monedaCodigo || '',
     fechaPago: '',
     importeTotal: '',
     medioPago: '',
@@ -32,7 +33,8 @@ const PagoComercialForm = ({ acuerdo, onSubmit, loading, error }) => {
   const hitos = selectedVia?.hitos || [];
 
   useEffect(() => {
-    const nextVia = (acuerdo?.vias || []).find((via) => via.viaOperacion === 'Via2');
+    const via2 = (acuerdo?.vias || []).filter((via) => via.viaOperacion === 'Via2');
+    const nextVia = via2.find((via) => String(via.id) === String(initialViaId)) || via2[0];
     setForm((prev) => ({
       ...prev,
       clienteExternoId: acuerdo?.clienteExternoId || '',
@@ -42,7 +44,7 @@ const PagoComercialForm = ({ acuerdo, onSubmit, loading, error }) => {
       monedaCodigo: nextVia?.monedaCodigo || '',
       aplicaciones: []
     }));
-  }, [acuerdo]);
+  }, [acuerdo, initialViaId]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -91,7 +93,7 @@ const PagoComercialForm = ({ acuerdo, onSubmit, loading, error }) => {
       </div>
       <div className="form-field">
         <label>Via</label>
-        <select name="acuerdoComercialViaId" value={form.acuerdoComercialViaId} onChange={handleChange} required>
+        <select name="acuerdoComercialViaId" value={form.acuerdoComercialViaId} onChange={handleChange} required disabled={lockVia}>
           {vias.map((via) => (
             <option key={via.id} value={via.id}>{via.viaOperacion} - {via.monedaCodigo}</option>
           ))}
