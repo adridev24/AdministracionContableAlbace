@@ -139,6 +139,10 @@ const VentasHomePage = () => {
             <strong>Cobranzas</strong>
             <span>Cancelacion efectiva de facturas confirmadas de Via 1.</span>
           </Link>
+          <Link className="module-menu-item" to="/ventas/cartera-cheques">
+            <strong>Cartera de cheques</strong>
+            <span>Consulta, deposito y acreditacion de cheques de terceros.</span>
+          </Link>
         </div>
       </SectionCard>
 

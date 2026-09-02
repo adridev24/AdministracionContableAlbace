@@ -11,7 +11,10 @@ namespace BudgetControl.Api.Models.Collections
         public decimal Importe { get; set; }
         public string? Banco { get; set; }
         public string? NumeroReferencia { get; set; }
+        public DateTime? FechaEmision { get; set; }
         public DateTime? FechaValor { get; set; }
+        public string? Librador { get; set; }
+        public string? CuitLibrador { get; set; }
         public string? Observaciones { get; set; }
         public DateTime FechaAlta { get; set; }
 
@@ -24,5 +27,6 @@ namespace BudgetControl.Api.Models.Collections
         public Cobranza Cobranza { get; set; } = null!;
         public MedioPagoCobranza MedioPago { get; set; } = null!;
         public BancoCobranza? BancoCatalogo { get; set; }
+        public ChequeTercero? ChequeTercero { get; set; }
     }
 }

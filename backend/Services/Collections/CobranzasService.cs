@@ -23,19 +23,22 @@ namespace BudgetControl.Api.Services.Collections
         private readonly IExternalDataService _externalDataService;
         private readonly IContabilizacionAutomaticaService _contabilizacionAutomatica;
         private readonly IConfiguracionesContablesService _configuracionesContables;
+        private readonly ICarteraChequesService _carteraChequesService;
 
         public CobranzasService(
             AppDbContext db,
             IUserContext userContext,
             IExternalDataService externalDataService,
             IContabilizacionAutomaticaService contabilizacionAutomatica,
-            IConfiguracionesContablesService configuracionesContables)
+            IConfiguracionesContablesService configuracionesContables,
+            ICarteraChequesService carteraChequesService)
         {
             _db = db;
             _userContext = userContext;
             _externalDataService = externalDataService;
             _contabilizacionAutomatica = contabilizacionAutomatica;
             _configuracionesContables = configuracionesContables;
+            _carteraChequesService = carteraChequesService;
         }
 
         public async Task<IEnumerable<MedioPagoCobranzaResponse>> GetMediosPagoDisponiblesAsync(bool soloActivos = false)
@@ -223,7 +226,10 @@ namespace BudgetControl.Api.Services.Collections
                 Importe = RoundMoney(request.Importe),
                 Banco = NormalizeOptional(validated.Banco?.Nombre ?? request.Banco),
                 NumeroReferencia = NormalizeOptional(request.NumeroReferencia),
+                FechaEmision = request.FechaEmision.HasValue ? NormalizeDateOnlyUtc(request.FechaEmision.Value) : null,
                 FechaValor = request.FechaValor.HasValue ? NormalizeDateOnlyUtc(request.FechaValor.Value) : null,
+                Librador = NormalizeOptional(request.Librador),
+                CuitLibrador = NormalizeOptional(request.CuitLibrador),
                 Observaciones = NormalizeOptional(request.Observaciones),
                 FechaAlta = DateTime.UtcNow,
                 UsuarioAlta = _userContext.UserName
@@ -247,7 +253,10 @@ namespace BudgetControl.Api.Services.Collections
             medioCobranza.Importe = RoundMoney(request.Importe);
             medioCobranza.Banco = NormalizeOptional(validated.Banco?.Nombre ?? request.Banco);
             medioCobranza.NumeroReferencia = NormalizeOptional(request.NumeroReferencia);
+            medioCobranza.FechaEmision = request.FechaEmision.HasValue ? NormalizeDateOnlyUtc(request.FechaEmision.Value) : null;
             medioCobranza.FechaValor = request.FechaValor.HasValue ? NormalizeDateOnlyUtc(request.FechaValor.Value) : null;
+            medioCobranza.Librador = NormalizeOptional(request.Librador);
+            medioCobranza.CuitLibrador = NormalizeOptional(request.CuitLibrador);
             medioCobranza.Observaciones = NormalizeOptional(request.Observaciones);
             medioCobranza.FechaModificacion = DateTime.UtcNow;
             medioCobranza.UsuarioModificacion = _userContext.UserName;
@@ -364,6 +373,7 @@ namespace BudgetControl.Api.Services.Collections
             await AplicarDistribucionACuotasAsync(cobranza);
             var asiento = await _contabilizacionAutomatica.GenerarAsientoAutomaticoAsync(await BuildSolicitudContableAsync(cobranza));
             var movimientoIds = await EnsureMovimientosCuentaCorrienteAsync(cobranza);
+            await _carteraChequesService.EnsureChequesDesdeCobranzaConfirmadaAsync(cobranza);
 
             var now = DateTime.UtcNow;
             cobranza.Estado = CobranzaEstado.Confirmada;
@@ -667,6 +677,12 @@ namespace BudgetControl.Api.Services.Collections
             if (RoundMoney(request.Importe) <= 0) throw new InvalidOperationException("El importe del medio de pago debe ser mayor a cero.");
             if (medio.RequiereReferencia && string.IsNullOrWhiteSpace(request.NumeroReferencia)) throw new InvalidOperationException("El medio de pago requiere referencia.");
             if (medio.RequiereFechaValor && !request.FechaValor.HasValue) throw new InvalidOperationException("El medio de pago requiere fecha valor.");
+            if (string.Equals(medio.Codigo, "CHEQUE", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!request.FechaEmision.HasValue) throw new InvalidOperationException("El cheque requiere fecha de emision.");
+                if (string.IsNullOrWhiteSpace(request.Librador)) throw new InvalidOperationException("El cheque requiere librador.");
+                if (string.IsNullOrWhiteSpace(request.CuitLibrador)) throw new InvalidOperationException("El cheque requiere CUIT del librador.");
+            }
 
             BancoCobranza? banco = null;
             if (medio.RequiereBanco)
@@ -824,7 +840,10 @@ namespace BudgetControl.Api.Services.Collections
                 BancoCobranzaId = medio.BancoCobranzaId,
                 Banco = medio.BancoCatalogo?.Nombre ?? medio.Banco,
                 NumeroReferencia = medio.NumeroReferencia,
+                FechaEmision = medio.FechaEmision,
                 FechaValor = medio.FechaValor,
+                Librador = medio.Librador,
+                CuitLibrador = medio.CuitLibrador,
                 Observaciones = medio.Observaciones
             };
         }

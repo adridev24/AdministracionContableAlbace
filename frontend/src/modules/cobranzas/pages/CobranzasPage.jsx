@@ -23,7 +23,10 @@ const initialMedio = {
   bancoCobranzaId: '',
   banco: '',
   numeroReferencia: '',
+  fechaEmision: today,
   fechaValor: today,
+  librador: '',
+  cuitLibrador: '',
   observaciones: '',
 };
 
@@ -228,6 +231,7 @@ const CobranzasPage = () => {
   };
 
   const selectedMedio = mediosDisponibles.find((m) => String(m.id) === String(medioForm.medioPagoCobranzaId));
+  const selectedMedioIsCheque = selectedMedio?.codigo === 'CHEQUE';
   const canEdit = selectedCobranza?.estado === 'Borrador';
   const confirmDisabledReason = useMemo(() => {
     if (!selectedCobranza || !canEdit) return '';
@@ -246,6 +250,7 @@ const CobranzasPage = () => {
           <p className="page-subtitle">Registro de cancelaciones efectivas sobre facturas confirmadas.</p>
         </div>
         <div className="page-actions">
+          <Link className="btn-secondary" to="/ventas/cartera-cheques">Cartera de cheques</Link>
           <Link className="btn-secondary" to="/ventas">Ventas</Link>
           <Link className="btn-secondary" to="/">Principal</Link>
         </div>
@@ -374,16 +379,38 @@ const CobranzasPage = () => {
                 )}
                 {selectedMedio?.requiereReferencia && (
                   <div className="form-field">
-                    <label>Referencia</label>
+                    <label>{selectedMedioIsCheque ? 'Numero de cheque' : 'Referencia'}</label>
                     <input name="numeroReferencia" value={medioForm.numeroReferencia} onChange={handleMedioChange} required />
+                  </div>
+                )}
+                {selectedMedioIsCheque && (
+                  <div className="form-field">
+                    <label>Fecha de emision</label>
+                    <input name="fechaEmision" type="date" value={medioForm.fechaEmision} onChange={handleMedioChange} required />
                   </div>
                 )}
                 {selectedMedio?.requiereFechaValor && (
                   <div className="form-field">
-                    <label>Fecha valor</label>
+                    <label>{selectedMedioIsCheque ? 'Fecha de vencimiento' : 'Fecha valor'}</label>
                     <input name="fechaValor" type="date" value={medioForm.fechaValor} onChange={handleMedioChange} required />
                   </div>
                 )}
+                {selectedMedioIsCheque && (
+                  <>
+                    <div className="form-field">
+                      <label>Librador</label>
+                      <input name="librador" value={medioForm.librador} onChange={handleMedioChange} required />
+                    </div>
+                    <div className="form-field">
+                      <label>CUIT librador</label>
+                      <input name="cuitLibrador" value={medioForm.cuitLibrador} onChange={handleMedioChange} required />
+                    </div>
+                  </>
+                )}
+                <div className="form-field">
+                  <label>Observaciones</label>
+                  <input name="observaciones" value={medioForm.observaciones} onChange={handleMedioChange} />
+                </div>
               </div>
               <div className="form-actions">
                 <button className="btn-secondary" type="submit" disabled={saving}>Agregar medio</button>
@@ -398,6 +425,7 @@ const CobranzasPage = () => {
                   <th>Medio</th>
                   <th>Importe</th>
                   <th>Referencia</th>
+                  <th>Detalle cheque</th>
                   <th>Concepto</th>
                   <th></th>
                 </tr>
@@ -408,6 +436,7 @@ const CobranzasPage = () => {
                     <td>{medio.medioPagoDescripcion}</td>
                     <td>{money(medio.importe)}</td>
                     <td>{[medio.banco, medio.numeroReferencia].filter(Boolean).join(' / ') || '-'}</td>
+                    <td>{medio.medioPagoCodigo === 'CHEQUE' ? [medio.librador, medio.cuitLibrador, medio.fechaValor && String(medio.fechaValor).slice(0, 10)].filter(Boolean).join(' / ') : '-'}</td>
                     <td>{medio.codigoConceptoContable}</td>
                     <td>{canEdit && <button className="btn-secondary" type="button" onClick={() => handleDeleteMedio(medio.id)}>Quitar</button>}</td>
                   </tr>

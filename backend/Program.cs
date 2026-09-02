@@ -87,6 +87,7 @@ builder.Services.AddScoped<IAsientosContablesService, AsientosContablesService>(
 builder.Services.AddScoped<IConfiguracionesContablesService, ConfiguracionesContablesService>();
 builder.Services.AddScoped<IContabilizacionAutomaticaService, ContabilizacionAutomaticaService>();
 builder.Services.AddScoped<ICobranzasService, CobranzasService>();
+builder.Services.AddScoped<ICarteraChequesService, CarteraChequesService>();
 builder.Services.AddScoped<IExternalDataService, ExternalDataService>();
 builder.Services.AddScoped<ICalculadorVentasService, CalculadorVentasService>();
 builder.Services.AddScoped<IPercepcionIibbService, PercepcionIibbService>();

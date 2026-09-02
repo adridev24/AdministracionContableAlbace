@@ -45,7 +45,10 @@ namespace BudgetControl.Api.DTOs.Collections
         public int? BancoCobranzaId { get; set; }
         public string? Banco { get; set; }
         public string? NumeroReferencia { get; set; }
+        public DateTime? FechaEmision { get; set; }
         public DateTime? FechaValor { get; set; }
+        public string? Librador { get; set; }
+        public string? CuitLibrador { get; set; }
         public string? Observaciones { get; set; }
     }
 
