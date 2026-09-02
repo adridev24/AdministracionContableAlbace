@@ -143,6 +143,11 @@ const VentasHomePage = () => {
             <strong>Cartera de cheques</strong>
             <span>Consulta, deposito y acreditacion de cheques de terceros.</span>
           </Link>
+
+          <Link className="module-menu-item" to="/ventas/cuenta-corriente">
+            <strong>Cuenta corriente</strong>
+            <span>Saldos, movimientos y facturas por cliente y moneda.</span>
+          </Link>
         </div>
       </SectionCard>
 
