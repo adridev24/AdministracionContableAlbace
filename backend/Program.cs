@@ -91,6 +91,7 @@ builder.Services.AddScoped<ICarteraChequesService, CarteraChequesService>();
 builder.Services.AddScoped<IExternalDataService, ExternalDataService>();
 builder.Services.AddScoped<ICalculadorVentasService, CalculadorVentasService>();
 builder.Services.AddScoped<IPercepcionIibbService, PercepcionIibbService>();
+builder.Services.AddScoped<ICuentaCorrienteClientesService, CuentaCorrienteClientesService>();
 builder.Services.AddScoped<IVentasService, VentasService>();
 
 var app = builder.Build();

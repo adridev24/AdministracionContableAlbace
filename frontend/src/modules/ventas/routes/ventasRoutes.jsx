@@ -9,11 +9,16 @@ import PercepcionesIibbPage from '../pages/PercepcionesIibbPage';
 import CategoriasItemsFacturablesPage from '../pages/CategoriasItemsFacturablesPage';
 import UnidadesMedidaPage from '../pages/UnidadesMedidaPage';
 import ItemsFacturablesPage from '../pages/ItemsFacturablesPage';
+import CuentaCorrienteClientesPage from '../pages/CuentaCorrienteClientesPage';
 
 const ventasRoutes = [
   {
     path: '/ventas',
     element: <VentasHomePage />,
+  },
+  {
+    path: '/ventas/cuenta-corriente',
+    element: <CuentaCorrienteClientesPage />,
   },
   {
     path: '/ventas/:ventaId',
