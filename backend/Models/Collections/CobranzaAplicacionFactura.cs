@@ -20,5 +20,6 @@ namespace BudgetControl.Api.Models.Collections
         public Cobranza Cobranza { get; set; } = null!;
         public Venta Venta { get; set; } = null!;
         public ICollection<CobranzaAplicacionObligacion> AplicacionesObligacion { get; set; } = new List<CobranzaAplicacionObligacion>();
+        public ICollection<CobranzaMedioPagoAplicacionFactura> AplicacionesMediosPago { get; set; } = new List<CobranzaMedioPagoAplicacionFactura>();
     }
 }

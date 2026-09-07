@@ -9,6 +9,7 @@ namespace BudgetControl.Api.Services.Collections
         Task<ChequeTerceroDetalleResponse?> GetChequeAsync(int id);
         Task<ChequeTerceroDetalleResponse> DepositarAsync(int id, DepositarChequeTerceroRequest request);
         Task<ChequeTerceroDetalleResponse> AcreditarAsync(int id, AcreditarChequeTerceroRequest request);
+        Task<ChequeTerceroDetalleResponse> RechazarAsync(int id, RechazarChequeTerceroRequest request);
         Task EnsureChequesDesdeCobranzaConfirmadaAsync(Cobranza cobranza);
     }
 }

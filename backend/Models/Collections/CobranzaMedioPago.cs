@@ -28,5 +28,6 @@ namespace BudgetControl.Api.Models.Collections
         public MedioPagoCobranza MedioPago { get; set; } = null!;
         public BancoCobranza? BancoCatalogo { get; set; }
         public ChequeTercero? ChequeTercero { get; set; }
+        public ICollection<CobranzaMedioPagoAplicacionFactura> AplicacionesFactura { get; set; } = new List<CobranzaMedioPagoAplicacionFactura>();
     }
 }

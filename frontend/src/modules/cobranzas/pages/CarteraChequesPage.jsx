@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import SectionCard from '../../../shared/components/SectionCard';
 import externalDataService from '../../comercial/services/externalDataService';
+import tesoreriaService from '../../tesoreria/services/tesoreriaService';
 import cobranzasService from '../services/cobranzasService';
 import carteraChequesService from '../services/carteraChequesService';
 import '../../ventas/ventas.css';
@@ -20,12 +21,17 @@ const initialFilters = {
 
 const initialDeposito = {
   fechaDeposito: today,
-  bancoDestino: '',
-  cuentaDestino: '',
+  cuentaBancariaEmpresaId: '',
+};
+
+const initialRechazo = {
+  fechaRechazo: today,
+  motivo: '',
 };
 
 const money = (value) => Number(value || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatDate = (value) => (value ? String(value).slice(0, 10) : '-');
+const formatCuentaBancaria = (cuenta) => `${cuenta.bancoNombre} - ${cuenta.descripcion} - ${cuenta.tipoCuenta} - ${cuenta.numeroCuenta} - ${cuenta.monedaCodigo}`;
 const getErrorMessage = (error) => (
   error?.response?.data?.error ||
   error?.response?.data?.detail ||
@@ -39,8 +45,12 @@ const CarteraChequesPage = () => {
   const [selectedCheque, setSelectedCheque] = useState(null);
   const [clientes, setClientes] = useState([]);
   const [bancos, setBancos] = useState([]);
+  const [cuentasBancarias, setCuentasBancarias] = useState([]);
   const [depositoForm, setDepositoForm] = useState(initialDeposito);
   const [acreditacionFecha, setAcreditacionFecha] = useState(today);
+  const [acreditacionModalOpen, setAcreditacionModalOpen] = useState(false);
+  const [rechazoForm, setRechazoForm] = useState(initialRechazo);
+  const [rechazoModalOpen, setRechazoModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -64,12 +74,14 @@ const CarteraChequesPage = () => {
     Promise.all([
       externalDataService.getClients(),
       cobranzasService.getBancos(true),
+      tesoreriaService.getCuentasBancarias({ activa: true }),
       carteraChequesService.getCheques(initialFilters),
     ])
-      .then(([clientesData, bancosData, chequesData]) => {
+      .then(([clientesData, bancosData, cuentasBancariasData, chequesData]) => {
         if (!mounted) return;
         setClientes(clientesData || []);
         setBancos(bancosData || []);
+        setCuentasBancarias(cuentasBancariasData || []);
         setCheques(chequesData || []);
       })
       .catch((loadError) => setError(getErrorMessage(loadError)))
@@ -89,6 +101,28 @@ const CarteraChequesPage = () => {
     });
     return Object.values(grouped).sort((a, b) => `${a.estado}${a.monedaCodigo}`.localeCompare(`${b.estado}${b.monedaCodigo}`));
   }, [cheques]);
+
+  const cuentasCompatiblesDeposito = useMemo(() => {
+    if (!selectedCheque?.monedaCodigo) return [];
+    return cuentasBancarias.filter((cuenta) => cuenta.activa && cuenta.monedaCodigo === selectedCheque.monedaCodigo);
+  }, [cuentasBancarias, selectedCheque]);
+
+  const cuentaDestinoSeleccionada = useMemo(() => {
+    if (!selectedCheque?.cuentaBancariaEmpresaId) return null;
+    return cuentasBancarias.find((cuenta) => cuenta.id === selectedCheque.cuentaBancariaEmpresaId) || {
+      bancoNombre: selectedCheque.cuentaBancariaEmpresaBanco,
+      descripcion: selectedCheque.cuentaBancariaEmpresaDescripcion,
+      tipoCuenta: selectedCheque.cuentaBancariaEmpresaTipoCuenta,
+      numeroCuenta: selectedCheque.cuentaBancariaEmpresaNumeroCuenta,
+      monedaCodigo: selectedCheque.cuentaBancariaEmpresaMonedaCodigo,
+    };
+  }, [cuentasBancarias, selectedCheque]);
+
+  const cuentaDestinoTexto = () => {
+    if (cuentaDestinoSeleccionada?.bancoNombre) return formatCuentaBancaria(cuentaDestinoSeleccionada);
+    const historico = [selectedCheque?.bancoDestino, selectedCheque?.cuentaDestino].filter(Boolean).join(' - ');
+    return historico || '-';
+  };
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -143,8 +177,59 @@ const CarteraChequesPage = () => {
     try {
       const updated = await carteraChequesService.acreditar(selectedCheque.id, { fechaAcreditacion: acreditacionFecha });
       setSelectedCheque(updated);
+      setAcreditacionModalOpen(false);
       await loadCheques(filters);
       setSuccess('Cheque acreditado.');
+    } catch (saveError) {
+      setError(getErrorMessage(saveError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openAcreditacionModal = () => {
+    setError('');
+    setSuccess('');
+    setAcreditacionFecha(today);
+    setAcreditacionModalOpen(true);
+  };
+
+  const closeAcreditacionModal = () => {
+    if (saving) return;
+    setAcreditacionModalOpen(false);
+  };
+
+  const openRechazoModal = () => {
+    setError('');
+    setSuccess('');
+    setRechazoForm(initialRechazo);
+    setRechazoModalOpen(true);
+  };
+
+  const closeRechazoModal = () => {
+    if (saving) return;
+    setRechazoModalOpen(false);
+    setRechazoForm(initialRechazo);
+  };
+
+  const handleRechazoChange = (event) => {
+    const { name, value } = event.target;
+    setRechazoForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleRechazar = async (event) => {
+    event.preventDefault();
+    if (!selectedCheque) return;
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const updated = await carteraChequesService.rechazar(selectedCheque.id, rechazoForm);
+      setSelectedCheque(updated);
+      setRechazoModalOpen(false);
+      setRechazoForm(initialRechazo);
+      await loadCheques(filters);
+      setSuccess('Cheque rechazado.');
     } catch (saveError) {
       setError(getErrorMessage(saveError));
     } finally {
@@ -297,16 +382,22 @@ const CarteraChequesPage = () => {
                   <input name="fechaDeposito" type="date" value={depositoForm.fechaDeposito} onChange={handleDepositoChange} required />
                 </div>
                 <div className="form-field">
-                  <label>Banco destino</label>
-                  <input name="bancoDestino" value={depositoForm.bancoDestino} onChange={handleDepositoChange} required />
-                </div>
-                <div className="form-field">
-                  <label>Cuenta destino</label>
-                  <input name="cuentaDestino" value={depositoForm.cuentaDestino} onChange={handleDepositoChange} required />
+                  <label>Cuenta bancaria destino</label>
+                  <select name="cuentaBancariaEmpresaId" value={depositoForm.cuentaBancariaEmpresaId} onChange={handleDepositoChange} required>
+                    <option value="">Seleccionar</option>
+                    {cuentasCompatiblesDeposito.map((cuenta) => (
+                      <option key={cuenta.id} value={cuenta.id}>{formatCuentaBancaria(cuenta)}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
+              {!cuentasCompatiblesDeposito.length && (
+                <p className="form-warning">No hay cuentas bancarias activas configuradas para {selectedCheque.monedaCodigo}.</p>
+              )}
               <div className="form-actions">
-                <button className="btn-primary" type="submit" disabled={saving}>{saving ? 'Depositando...' : 'Depositar'}</button>
+                <button className="btn-primary" type="submit" disabled={saving || !cuentasCompatiblesDeposito.length}>
+                  {saving ? 'Depositando...' : 'Depositar'}
+                </button>
               </div>
             </form>
           )}
@@ -315,34 +406,100 @@ const CarteraChequesPage = () => {
             <>
               <div className="summary-grid">
                 <div><span>Fecha deposito</span><strong>{formatDate(selectedCheque.fechaDeposito)}</strong></div>
-                <div><span>Banco destino</span><strong>{selectedCheque.bancoDestino || '-'}</strong></div>
-                <div><span>Cuenta destino</span><strong>{selectedCheque.cuentaDestino || '-'}</strong></div>
+                <div><span>Cuenta destino</span><strong>{cuentaDestinoTexto()}</strong></div>
                 <div><span>Usuario deposito</span><strong>{selectedCheque.usuarioDeposito || '-'}</strong></div>
               </div>
-              <form className="venta-form" onSubmit={handleAcreditar}>
-                <div className="form-grid">
-                  <div className="form-field">
-                    <label>Fecha acreditacion</label>
-                    <input type="date" value={acreditacionFecha} onChange={(event) => setAcreditacionFecha(event.target.value)} required />
-                  </div>
-                </div>
-                <div className="form-actions">
-                  <button className="btn-primary" type="submit" disabled={saving}>{saving ? 'Acreditando...' : 'Acreditar'}</button>
-                </div>
-              </form>
+              <div className="form-actions">
+                <button className="btn-primary" type="button" onClick={openAcreditacionModal} disabled={saving || !selectedCheque.cuentaBancariaEmpresaId}>Acreditar</button>
+                <button className="btn-secondary" type="button" onClick={openRechazoModal} disabled={saving}>Rechazar</button>
+              </div>
+              {!selectedCheque.cuentaBancariaEmpresaId && (
+                <p className="form-warning">Debe asociarse una cuenta bancaria propia antes de acreditar.</p>
+              )}
             </>
           )}
 
           {selectedCheque.estado === 'ACREDITADO' && (
             <div className="summary-grid">
               <div><span>Fecha deposito</span><strong>{formatDate(selectedCheque.fechaDeposito)}</strong></div>
-              <div><span>Banco destino</span><strong>{selectedCheque.bancoDestino || '-'}</strong></div>
-              <div><span>Cuenta destino</span><strong>{selectedCheque.cuentaDestino || '-'}</strong></div>
+              <div><span>Cuenta destino</span><strong>{cuentaDestinoTexto()}</strong></div>
               <div><span>Fecha acreditacion</span><strong>{formatDate(selectedCheque.fechaAcreditacion)}</strong></div>
               <div><span>Usuario acreditacion</span><strong>{selectedCheque.usuarioAcreditacion || '-'}</strong></div>
+              <div><span>Asiento acreditacion</span><strong>{selectedCheque.asientoContableAcreditacionId || '-'}</strong></div>
+            </div>
+          )}
+
+          {selectedCheque.estado === 'RECHAZADO' && (
+            <div className="summary-grid">
+              <div><span>Fecha deposito</span><strong>{formatDate(selectedCheque.fechaDeposito)}</strong></div>
+              <div><span>Cuenta destino</span><strong>{cuentaDestinoTexto()}</strong></div>
+              <div><span>Fecha rechazo</span><strong>{formatDate(selectedCheque.fechaRechazo)}</strong></div>
+              <div><span>Motivo rechazo</span><strong>{selectedCheque.motivoRechazo || '-'}</strong></div>
+              <div><span>Usuario rechazo</span><strong>{selectedCheque.usuarioRechazo || '-'}</strong></div>
+              <div><span>Asiento rechazo</span><strong>{selectedCheque.asientoContableRechazoId || '-'}</strong></div>
             </div>
           )}
         </SectionCard>
+      )}
+
+      {acreditacionModalOpen && selectedCheque && (
+        <div className="modal-backdrop">
+          <form className="modal-card" onSubmit={handleAcreditar}>
+            <div className="modal-header">
+              <h2>Acreditar cheque</h2>
+              <button className="modal-close" type="button" onClick={closeAcreditacionModal} aria-label="Cerrar">x</button>
+            </div>
+            <div className="modal-body">
+              <div className="summary-grid">
+                <div><span>Cheque</span><strong>{selectedCheque.numeroCheque}</strong></div>
+                <div><span>Importe</span><strong>{selectedCheque.monedaCodigo} {money(selectedCheque.importe)}</strong></div>
+                <div><span>Cuenta destino</span><strong>{cuentaDestinoTexto()}</strong></div>
+              </div>
+              <div className="form-field">
+                <label>Fecha acreditacion</label>
+                <input type="date" value={acreditacionFecha} onChange={(event) => setAcreditacionFecha(event.target.value)} required />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" type="button" onClick={closeAcreditacionModal} disabled={saving}>Cancelar</button>
+              <button className="btn-primary" type="submit" disabled={saving}>
+                {saving ? 'Acreditando...' : 'Acreditar'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {rechazoModalOpen && selectedCheque && (
+        <div className="modal-backdrop">
+          <form className="modal-card" onSubmit={handleRechazar}>
+            <div className="modal-header">
+              <h2>Rechazar cheque</h2>
+              <button className="modal-close" type="button" onClick={closeRechazoModal} aria-label="Cerrar">x</button>
+            </div>
+            <div className="modal-body">
+              <p className="form-warning">El cheque quedara rechazado, se reabrira la deuda del cliente y se generara el efecto contable correspondiente. La cobranza original no se anula.</p>
+              <div className="summary-grid">
+                <div><span>Cheque</span><strong>{selectedCheque.numeroCheque}</strong></div>
+                <div><span>Importe</span><strong>{selectedCheque.monedaCodigo} {money(selectedCheque.importe)}</strong></div>
+              </div>
+              <div className="form-field">
+                <label>Fecha de rechazo</label>
+                <input name="fechaRechazo" type="date" value={rechazoForm.fechaRechazo} onChange={handleRechazoChange} required />
+              </div>
+              <div className="form-field">
+                <label>Motivo</label>
+                <textarea name="motivo" rows="4" value={rechazoForm.motivo} onChange={handleRechazoChange} required />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" type="button" onClick={closeRechazoModal} disabled={saving}>Cancelar</button>
+              <button className="btn-primary" type="submit" disabled={saving || !rechazoForm.motivo.trim()}>
+                {saving ? 'Rechazando...' : 'Confirmar rechazo'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {error && <p className="form-error">{error}</p>}

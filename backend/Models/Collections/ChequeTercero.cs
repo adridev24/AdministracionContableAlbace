@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using BudgetControl.Api.Models.Accounting;
+using BudgetControl.Api.Models.Treasury;
 
 namespace BudgetControl.Api.Models.Collections
 {
@@ -34,13 +36,22 @@ namespace BudgetControl.Api.Models.Collections
         public DateTime? FechaModificacion { get; set; }
         public string? UsuarioModificacion { get; set; }
         public DateTime? FechaDeposito { get; set; }
+        public int? CuentaBancariaEmpresaId { get; set; }
         public string? BancoDestino { get; set; }
         public string? CuentaDestino { get; set; }
         public string? UsuarioDeposito { get; set; }
         public DateTime? FechaAcreditacion { get; set; }
         public string? UsuarioAcreditacion { get; set; }
+        public DateTime? FechaRechazo { get; set; }
+        public string? MotivoRechazo { get; set; }
+        public string? UsuarioRechazo { get; set; }
+        public int? AsientoContableAcreditacionId { get; set; }
+        public int? AsientoContableRechazoId { get; set; }
 
         public CobranzaMedioPago CobranzaMedioPago { get; set; } = null!;
         public BancoCobranza BancoCatalogo { get; set; } = null!;
+        public CuentaBancariaEmpresa? CuentaBancariaEmpresa { get; set; }
+        public AsientoContable? AsientoContableAcreditacion { get; set; }
+        public AsientoContable? AsientoContableRechazo { get; set; }
     }
 }

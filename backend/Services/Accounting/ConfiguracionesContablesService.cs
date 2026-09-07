@@ -10,8 +10,10 @@ namespace BudgetControl.Api.Services.Accounting
         private static readonly IReadOnlyList<TipoOperacionContableResponse> TiposOperacion = new List<TipoOperacionContableResponse>
         {
             new() { Codigo = "FACTURA_VENTA", Descripcion = "Factura de venta", ConceptosSugeridos = new() { "CLIENTES", "VENTA_NETA", "IVA_DEBITO", "PERCEPCION_IIBB" } },
-            new() { Codigo = "COBRO_CLIENTE", Descripcion = "Cobro de cliente", ConceptosSugeridos = new() { "CAJA", "BANCO", "CLIENTES" } },
+            new() { Codigo = "COBRANZA_CLIENTE", Descripcion = "Cobranza de cliente", ConceptosSugeridos = new() { "CAJA", "BANCO", "CHEQUES_TERCEROS", "RETENCION_GANANCIAS_SUFRIDA", "RETENCION_IIBB_SUFRIDA", "CLIENTES" } },
             new() { Codigo = "RETENCION_CLIENTE", Descripcion = "Retencion de cliente", ConceptosSugeridos = new() { "RETENCIONES", "CLIENTES" } },
+            new() { Codigo = "RECHAZO_CHEQUE_CLIENTE", Descripcion = "Rechazo de cheque de tercero", ConceptosSugeridos = new() { "CLIENTES", "CHEQUES_TERCEROS" } },
+            new() { Codigo = "ACREDITACION_CHEQUE", Descripcion = "Acreditacion de cheque de tercero", ConceptosSugeridos = new() { "BANCO", "CHEQUES_TERCEROS" } },
             new() { Codigo = "ANULACION_FACTURA_VENTA", Descripcion = "Anulacion de factura de venta", ConceptosSugeridos = new() { "CLIENTES", "VENTA_NETA", "IVA_DEBITO" } },
             new() { Codigo = "ANULACION_COBRO_CLIENTE", Descripcion = "Anulacion de cobro de cliente", ConceptosSugeridos = new() { "CAJA", "BANCO", "CLIENTES" } }
         };

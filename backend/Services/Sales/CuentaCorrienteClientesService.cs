@@ -11,6 +11,7 @@ namespace BudgetControl.Api.Services.Sales
     {
         private const string ModuloOrigenVentas = "VENTAS";
         private const string ModuloOrigenCobranzas = "COBRANZAS";
+        private const string ModuloOrigenCarteraCheques = "CARTERA_CHEQUES";
         private const string EstadoPendiente = "PENDIENTE";
         private const string EstadoParcial = "PARCIALMENTE_COBRADA";
         private const string EstadoCancelada = "CANCELADA";
@@ -54,6 +55,13 @@ namespace BudgetControl.Api.Services.Sales
                 .Select(id => id!.Value)
                 .Distinct()
                 .ToList();
+            var chequeIdsOrigen = movimientosBase
+                .Where(m => IsModulo(m.ModuloOrigen, ModuloOrigenCarteraCheques))
+                .Select(m => TryParseInt(m.IdOrigen))
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
 
             var ventasOrigen = await _db.Ventas
                 .AsNoTracking()
@@ -66,6 +74,11 @@ namespace BudgetControl.Api.Services.Sales
                 .Where(c => cobranzaIdsOrigen.Contains(c.Id))
                 .ToDictionaryAsync(c => c.Id);
 
+            var chequesOrigen = await _db.ChequesTerceros
+                .AsNoTracking()
+                .Where(c => chequeIdsOrigen.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id);
+
             var obraIds = movimientosBase.Select(m => m.ObraExternaId)
                 .Concat(ventasOrigen.Values.Select(v => v.ObraExternaId))
                 .Where(id => !string.IsNullOrWhiteSpace(id))
@@ -73,7 +86,7 @@ namespace BudgetControl.Api.Services.Sales
                 .ToList();
             var obras = await GetObrasAsync(normalizedClienteId, obraIds);
 
-            var cuentaMovimientos = BuildMovimientos(movimientosBase, ventasOrigen, cobranzasOrigen, obras, normalizedMoneda, fechaDesde);
+            var cuentaMovimientos = BuildMovimientos(movimientosBase, ventasOrigen, cobranzasOrigen, chequesOrigen, obras, normalizedMoneda, fechaDesde);
 
             var facturas = await BuildFacturasAsync(normalizedClienteId, normalizedObraId, normalizedMoneda, normalizedEstadoFactura, fechaDesde, fechaHastaExclusive, obras);
 
@@ -118,6 +131,7 @@ namespace BudgetControl.Api.Services.Sales
             IEnumerable<VentaMovimientoCuentaCorriente> movimientosBase,
             IReadOnlyDictionary<int, Venta> ventasOrigen,
             IReadOnlyDictionary<int, Cobranza> cobranzasOrigen,
+            IReadOnlyDictionary<int, ChequeTercero> chequesOrigen,
             IReadOnlyDictionary<string, Obra> obras,
             string? monedaFiltro,
             DateTime? fechaDesde)
@@ -125,7 +139,7 @@ namespace BudgetControl.Api.Services.Sales
             var movimientosResueltos = movimientosBase
                 .OrderBy(m => m.Fecha)
                 .ThenBy(m => m.Id)
-                .Select(m => ResolveMovimiento(m, ventasOrigen, cobranzasOrigen, obras))
+                .Select(m => ResolveMovimiento(m, ventasOrigen, cobranzasOrigen, chequesOrigen, obras))
                 .Where(m => m != null)
                 .Select(m => m!)
                 .Where(m => string.IsNullOrWhiteSpace(monedaFiltro) || string.Equals(m.MonedaCodigo, monedaFiltro, StringComparison.OrdinalIgnoreCase))
@@ -205,9 +219,10 @@ namespace BudgetControl.Api.Services.Sales
             VentaMovimientoCuentaCorriente movimiento,
             IReadOnlyDictionary<int, Venta> ventasOrigen,
             IReadOnlyDictionary<int, Cobranza> cobranzasOrigen,
+            IReadOnlyDictionary<int, ChequeTercero> chequesOrigen,
             IReadOnlyDictionary<string, Obra> obras)
         {
-            var moneda = ResolveMoneda(movimiento, ventasOrigen, cobranzasOrigen);
+            var moneda = ResolveMoneda(movimiento, ventasOrigen, cobranzasOrigen, chequesOrigen);
             if (string.IsNullOrWhiteSpace(moneda)) return null;
 
             var obraId = ResolveObraId(movimiento, ventasOrigen);
@@ -264,6 +279,15 @@ namespace BudgetControl.Api.Services.Sales
                 .Where(a => ventaIds.Contains(a.VentaId))
                 .ToListAsync();
 
+            var rechazos = await _db.CobranzasMediosPagoAplicacionesFactura
+                .AsNoTracking()
+                .Where(d => ventaIds.Contains(d.AplicacionFactura.VentaId) &&
+                    d.CobranzaMedioPago.ChequeTercero != null &&
+                    d.CobranzaMedioPago.ChequeTercero.Estado == ChequeTerceroEstado.RECHAZADO)
+                .GroupBy(d => d.AplicacionFactura.VentaId)
+                .Select(g => new { VentaId = g.Key, Importe = g.Sum(d => d.ImporteAplicado) })
+                .ToDictionaryAsync(g => g.VentaId, g => g.Importe);
+
             var obraIdsFaltantes = ventas
                 .Select(v => v.ObraExternaId)
                 .Where(id => !obrasIniciales.ContainsKey(id))
@@ -285,8 +309,10 @@ namespace BudgetControl.Api.Services.Sales
                 var totalCobrado = RoundMoney(aplicacionesFactura
                     .Where(a => a.Cobranza.Estado == CobranzaEstado.Confirmada)
                     .Sum(a => a.ImporteAplicado));
-                var saldo = RoundMoney(v.Total - totalCobrado);
-                var estado = BuildEstadoFactura(v.Total, totalCobrado);
+                rechazos.TryGetValue(v.Id, out var totalRechazado);
+                var totalCobradoEfectivo = Math.Max(RoundMoney(totalCobrado - totalRechazado), 0);
+                var saldo = RoundMoney(v.Total - totalCobradoEfectivo);
+                var estado = BuildEstadoFactura(v.Total, totalCobradoEfectivo);
                 obras.TryGetValue(v.ObraExternaId, out var obra);
 
                 return new CuentaCorrienteFacturaResponse
@@ -299,7 +325,7 @@ namespace BudgetControl.Api.Services.Sales
                     ObraNombre = obra?.NombreObra,
                     MonedaCodigo = v.MonedaCodigo,
                     TotalFactura = RoundMoney(v.Total),
-                    TotalCobrado = totalCobrado,
+                    TotalCobrado = totalCobradoEfectivo,
                     Saldo = saldo,
                     EstadoCobranza = estado,
                     Cobranzas = aplicacionesFactura.Select(a => new CuentaCorrienteCobranzaAplicadaResponse
@@ -347,7 +373,8 @@ namespace BudgetControl.Api.Services.Sales
         private static string? ResolveMoneda(
             VentaMovimientoCuentaCorriente movimiento,
             IReadOnlyDictionary<int, Venta> ventasOrigen,
-            IReadOnlyDictionary<int, Cobranza> cobranzasOrigen)
+            IReadOnlyDictionary<int, Cobranza> cobranzasOrigen,
+            IReadOnlyDictionary<int, ChequeTercero> chequesOrigen)
         {
             var id = TryParseInt(movimiento.IdOrigen);
             if (!id.HasValue) return null;
@@ -360,6 +387,11 @@ namespace BudgetControl.Api.Services.Sales
             if (IsModulo(movimiento.ModuloOrigen, ModuloOrigenCobranzas) && cobranzasOrigen.TryGetValue(id.Value, out var cobranza))
             {
                 return cobranza.MonedaCodigo;
+            }
+
+            if (IsModulo(movimiento.ModuloOrigen, ModuloOrigenCarteraCheques) && chequesOrigen.TryGetValue(id.Value, out var cheque))
+            {
+                return cheque.MonedaCodigo;
             }
 
             return null;
@@ -387,6 +419,11 @@ namespace BudgetControl.Api.Services.Sales
             if (IsModulo(movimiento.ModuloOrigen, ModuloOrigenCobranzas))
             {
                 return $"Cobranza {movimiento.IdOrigen}";
+            }
+
+            if (IsModulo(movimiento.ModuloOrigen, ModuloOrigenCarteraCheques))
+            {
+                return $"Cheque {movimiento.IdOrigen}";
             }
 
             return null;

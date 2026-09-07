@@ -59,6 +59,8 @@ namespace BudgetControl.Api.Services.Accounting
             }
 
             var importes = NormalizeImportes(request.ImportesPorConcepto);
+            var cuentasOverride = NormalizeCuentasOverride(request.CuentasContablesOverridePorConcepto, importes);
+            var cuentasOverrideData = await GetCuentasOverrideAsync(cuentasOverride);
             ValidateConceptos(configuracion, importes);
 
             var detalles = configuracion.Detalles
@@ -67,10 +69,17 @@ namespace BudgetControl.Api.Services.Accounting
                 .Select(detalle =>
                 {
                     var importe = importes[detalle.Concepto];
+                    var cuentaContableId = cuentasOverride.TryGetValue(detalle.Concepto, out var overrideId)
+                        ? overrideId
+                        : detalle.CuentaContableId;
+                    var cuentaNombre = cuentasOverrideData.TryGetValue(cuentaContableId, out var cuentaOverride)
+                        ? cuentaOverride
+                        : detalle.CuentaNombre;
+
                     return new CrearAsientoContableDetalleRequest
                     {
-                        CuentaContableId = detalle.CuentaContableId,
-                        Descripcion = $"{detalle.Concepto} - {detalle.CuentaNombre}",
+                        CuentaContableId = cuentaContableId,
+                        Descripcion = $"{detalle.Concepto} - {cuentaNombre}",
                         Debe = detalle.TipoMovimiento == "Debe" ? importe : 0,
                         Haber = detalle.TipoMovimiento == "Haber" ? importe : 0
                     };
@@ -121,6 +130,68 @@ namespace BudgetControl.Api.Services.Accounting
             }
 
             return normalized;
+        }
+
+        private static Dictionary<string, int> NormalizeCuentasOverride(
+            Dictionary<string, int>? cuentasOverride,
+            IReadOnlyDictionary<string, decimal> importes)
+        {
+            var normalized = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (cuentasOverride == null || cuentasOverride.Count == 0)
+            {
+                return normalized;
+            }
+
+            foreach (var item in cuentasOverride)
+            {
+                var concepto = NormalizeRequiredUpper(item.Key, "El concepto de cuenta contable dinamica es obligatorio.");
+                if (!importes.ContainsKey(concepto))
+                {
+                    throw new InvalidOperationException($"El concepto {concepto} con cuenta contable dinamica no tiene importe informado.");
+                }
+
+                if (item.Value <= 0)
+                {
+                    throw new InvalidOperationException("La cuenta contable dinamica debe ser valida.");
+                }
+
+                if (normalized.ContainsKey(concepto))
+                {
+                    throw new InvalidOperationException("No se permiten conceptos duplicados para cuentas contables dinamicas.");
+                }
+
+                normalized.Add(concepto, item.Value);
+            }
+
+            return normalized;
+        }
+
+        private async Task<Dictionary<int, string>> GetCuentasOverrideAsync(IReadOnlyDictionary<string, int> cuentasOverride)
+        {
+            if (cuentasOverride.Count == 0)
+            {
+                return new Dictionary<int, string>();
+            }
+
+            var cuentaIds = cuentasOverride.Values.Distinct().ToList();
+            var cuentas = await _db.CuentasContables
+                .Where(c => cuentaIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id);
+
+            foreach (var cuentaId in cuentaIds)
+            {
+                if (!cuentas.TryGetValue(cuentaId, out var cuenta))
+                {
+                    throw new InvalidOperationException("La cuenta contable dinamica indicada no existe.");
+                }
+
+                if (!cuenta.Activa)
+                {
+                    throw new InvalidOperationException("La cuenta contable dinamica debe estar activa.");
+                }
+            }
+
+            return cuentas.ToDictionary(c => c.Key, c => $"{c.Value.Codigo} {c.Value.Nombre}");
         }
 
         private static void ValidateConceptos(ConfiguracionContableResponse configuracion, IReadOnlyDictionary<string, decimal> importes)

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using BudgetControl.Api.Models.Treasury;
 
 namespace BudgetControl.Api.Models.Collections
 {
@@ -19,6 +20,10 @@ namespace BudgetControl.Api.Models.Collections
         [Required]
         public string UsuarioAlta { get; set; } = null!;
 
+        public DateTime? FechaModificacion { get; set; }
+        public string? UsuarioModificacion { get; set; }
+
         public ICollection<CobranzaMedioPago> CobranzasMediosPago { get; set; } = new List<CobranzaMedioPago>();
+        public ICollection<CuentaBancariaEmpresa> CuentasBancariasEmpresa { get; set; } = new List<CuentaBancariaEmpresa>();
     }
 }

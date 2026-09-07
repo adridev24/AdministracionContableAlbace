@@ -374,6 +374,7 @@ namespace BudgetControl.Api.Services.Collections
             }
 
             await _db.SaveChangesAsync();
+            await EnsureDistribucionMediosAplicacionesFacturaAsync(cobranza);
             await AplicarDistribucionACuotasAsync(cobranza);
             var asiento = await _contabilizacionAutomatica.GenerarAsientoAutomaticoAsync(await BuildSolicitudContableAsync(cobranza));
             var movimientoIds = await EnsureMovimientosCuentaCorrienteAsync(cobranza);
@@ -463,10 +464,14 @@ namespace BudgetControl.Api.Services.Collections
                 .Include(c => c.MediosPago)
                     .ThenInclude(m => m.ChequeTercero)
                 .Include(c => c.MediosPago)
+                    .ThenInclude(m => m.AplicacionesFactura)
+                .Include(c => c.MediosPago)
                     .ThenInclude(m => m.BancoCatalogo)
                 .Include(c => c.AplicacionesFactura)
                     .ThenInclude(a => a.Venta)
                         .ThenInclude(v => v.TipoComprobante)
+                .Include(c => c.AplicacionesFactura)
+                    .ThenInclude(a => a.AplicacionesMediosPago)
                 .Include(c => c.AplicacionesFactura)
                     .ThenInclude(a => a.AplicacionesObligacion)
                         .ThenInclude(o => o.CuotaComercial)
@@ -599,6 +604,104 @@ namespace BudgetControl.Api.Services.Collections
                 cuota.ImportePagado = RoundMoney(cuota.ImportePagado + item.ImporteAplicado);
                 cuota.SaldoPendiente = Math.Max(RoundMoney(cuota.ImporteOriginal - cuota.ImportePagado), 0);
                 UpdateCuotaEstado(cuota);
+            }
+        }
+
+        private async Task EnsureDistribucionMediosAplicacionesFacturaAsync(Cobranza cobranza)
+        {
+            var medios = cobranza.MediosPago.OrderBy(m => m.Id).ToList();
+            var aplicaciones = cobranza.AplicacionesFactura.OrderBy(a => a.Id).ToList();
+            if (!medios.Any() || !aplicaciones.Any()) return;
+
+            var medioIds = medios.Select(m => m.Id).ToList();
+            var aplicacionIds = aplicaciones.Select(a => a.Id).ToList();
+            var existentes = await _db.CobranzasMediosPagoAplicacionesFactura
+                .Where(d => medioIds.Contains(d.CobranzaMedioPagoId) || aplicacionIds.Contains(d.CobranzaAplicacionFacturaId))
+                .ToListAsync();
+
+            if (existentes.Any())
+            {
+                ValidateDistribucionCompleta(cobranza, existentes);
+                return;
+            }
+
+            var restanteAplicaciones = aplicaciones.ToDictionary(a => a.Id, a => RoundMoney(a.ImporteAplicado));
+            var aplicacionIndex = 0;
+            var now = DateTime.UtcNow;
+
+            foreach (var medio in medios)
+            {
+                var restanteMedio = RoundMoney(medio.Importe);
+                while (restanteMedio > 0 && aplicacionIndex < aplicaciones.Count)
+                {
+                    var aplicacion = aplicaciones[aplicacionIndex];
+                    var restanteAplicacion = restanteAplicaciones[aplicacion.Id];
+                    if (restanteAplicacion <= 0)
+                    {
+                        aplicacionIndex++;
+                        continue;
+                    }
+
+                    var importe = RoundMoney(Math.Min(restanteMedio, restanteAplicacion));
+                    _db.CobranzasMediosPagoAplicacionesFactura.Add(new CobranzaMedioPagoAplicacionFactura
+                    {
+                        CobranzaMedioPagoId = medio.Id,
+                        CobranzaAplicacionFacturaId = aplicacion.Id,
+                        ImporteAplicado = importe,
+                        FechaAlta = now,
+                        UsuarioAlta = _userContext.UserName
+                    });
+
+                    restanteMedio = RoundMoney(restanteMedio - importe);
+                    restanteAplicaciones[aplicacion.Id] = RoundMoney(restanteAplicacion - importe);
+                }
+
+                if (restanteMedio > 0)
+                {
+                    throw new InvalidOperationException("No se pudo distribuir completamente los medios de pago de la cobranza.");
+                }
+            }
+
+            if (restanteAplicaciones.Values.Any(v => v > 0))
+            {
+                throw new InvalidOperationException("No se pudo distribuir completamente las aplicaciones de factura de la cobranza.");
+            }
+
+            await _db.SaveChangesAsync();
+        }
+
+        private static void ValidateDistribucionCompleta(Cobranza cobranza, IEnumerable<CobranzaMedioPagoAplicacionFactura> distribuciones)
+        {
+            var medios = cobranza.MediosPago.ToDictionary(m => m.Id);
+            var aplicaciones = cobranza.AplicacionesFactura.ToDictionary(a => a.Id);
+
+            foreach (var distribucion in distribuciones)
+            {
+                if (!medios.TryGetValue(distribucion.CobranzaMedioPagoId, out var medio) ||
+                    !aplicaciones.TryGetValue(distribucion.CobranzaAplicacionFacturaId, out var aplicacion) ||
+                    medio.CobranzaId != cobranza.Id ||
+                    aplicacion.CobranzaId != cobranza.Id)
+                {
+                    throw new InvalidOperationException("La distribucion de medios de pago no pertenece completamente a la cobranza.");
+                }
+            }
+
+            foreach (var medio in medios.Values)
+            {
+                var distribuido = RoundMoney(distribuciones.Where(d => d.CobranzaMedioPagoId == medio.Id).Sum(d => d.ImporteAplicado));
+                if (distribuido != RoundMoney(medio.Importe))
+                {
+                    throw new InvalidOperationException("La distribucion de medios de pago de la cobranza esta incompleta o inconsistente.");
+                }
+            }
+
+            foreach (var aplicacion in aplicaciones.Values)
+            {
+                var distribuido = RoundMoney(distribuciones.Where(d => d.CobranzaAplicacionFacturaId == aplicacion.Id).Sum(d => d.ImporteAplicado));
+                if (distribuido != RoundMoney(aplicacion.ImporteAplicado))
+                {
+                    throw new InvalidOperationException("La distribucion de aplicaciones de factura de la cobranza esta incompleta o inconsistente.");
+                }
             }
         }
 
@@ -890,6 +993,15 @@ namespace BudgetControl.Api.Services.Collections
                 .Select(g => new { VentaId = g.Key, Importe = g.Sum(a => a.ImporteAplicado) })
                 .ToDictionaryAsync(x => x.VentaId, x => x.Importe);
 
+            var rechazadas = await _db.CobranzasMediosPagoAplicacionesFactura
+                .AsNoTracking()
+                .Where(d => ventaIds.Contains(d.AplicacionFactura.VentaId) &&
+                    d.CobranzaMedioPago.ChequeTercero != null &&
+                    d.CobranzaMedioPago.ChequeTercero.Estado == ChequeTerceroEstado.RECHAZADO)
+                .GroupBy(d => d.AplicacionFactura.VentaId)
+                .Select(g => new { VentaId = g.Key, Importe = g.Sum(d => d.ImporteAplicado) })
+                .ToDictionaryAsync(x => x.VentaId, x => x.Importe);
+
             var reservas = await _db.CobranzasAplicacionesFactura
                 .AsNoTracking()
                 .Where(a => ventaIds.Contains(a.VentaId) &&
@@ -903,8 +1015,10 @@ namespace BudgetControl.Api.Services.Collections
             return ventas.ToDictionary(v => v.Id, v =>
             {
                 confirmadas.TryGetValue(v.Id, out var cobrado);
+                rechazadas.TryGetValue(v.Id, out var rechazado);
                 reservas.TryGetValue(v.Id, out var reservado);
-                return new FacturaBalance(RoundMoney(cobrado), RoundMoney(reservado), Math.Max(RoundMoney(v.Total - cobrado - reservado), 0));
+                var cobradoEfectivo = Math.Max(RoundMoney(cobrado - rechazado), 0);
+                return new FacturaBalance(cobradoEfectivo, RoundMoney(reservado), Math.Max(RoundMoney(v.Total - cobradoEfectivo - reservado), 0));
             });
         }
 

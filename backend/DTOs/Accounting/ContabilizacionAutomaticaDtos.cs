@@ -8,6 +8,7 @@ namespace BudgetControl.Api.DTOs.Accounting
         public DateTime Fecha { get; set; }
         public string Descripcion { get; set; } = string.Empty;
         public Dictionary<string, decimal> ImportesPorConcepto { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, int> CuentasContablesOverridePorConcepto { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     public class ContabilizacionAutomaticaResponse

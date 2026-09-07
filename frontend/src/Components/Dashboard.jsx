@@ -31,6 +31,13 @@ const modules = [
     route: '/contabilidad',
     metric: 'Plan de Cuentas / Asientos',
   },
+  {
+    title: 'Tesoreria',
+    description: 'Bancos, cuentas propias y operaciones bancarias.',
+    status: 'Disponible',
+    route: '/tesoreria',
+    metric: 'Bancos / Cuentas',
+  },
 ];
 
 const Dashboard = () => {

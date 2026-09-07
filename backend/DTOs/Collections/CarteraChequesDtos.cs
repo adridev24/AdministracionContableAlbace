@@ -39,11 +39,22 @@ namespace BudgetControl.Api.DTOs.Collections
         public DateTime? FechaModificacion { get; set; }
         public string? UsuarioModificacion { get; set; }
         public DateTime? FechaDeposito { get; set; }
+        public int? CuentaBancariaEmpresaId { get; set; }
+        public string? CuentaBancariaEmpresaDescripcion { get; set; }
+        public string? CuentaBancariaEmpresaBanco { get; set; }
+        public string? CuentaBancariaEmpresaTipoCuenta { get; set; }
+        public string? CuentaBancariaEmpresaNumeroCuenta { get; set; }
+        public string? CuentaBancariaEmpresaMonedaCodigo { get; set; }
         public string? BancoDestino { get; set; }
         public string? CuentaDestino { get; set; }
         public string? UsuarioDeposito { get; set; }
         public DateTime? FechaAcreditacion { get; set; }
         public string? UsuarioAcreditacion { get; set; }
+        public DateTime? FechaRechazo { get; set; }
+        public string? MotivoRechazo { get; set; }
+        public string? UsuarioRechazo { get; set; }
+        public int? AsientoContableAcreditacionId { get; set; }
+        public int? AsientoContableRechazoId { get; set; }
         public string MedioPagoCodigo { get; set; } = string.Empty;
         public string MedioPagoDescripcion { get; set; } = string.Empty;
     }
@@ -54,15 +65,21 @@ namespace BudgetControl.Api.DTOs.Collections
         public DateTime FechaDeposito { get; set; }
 
         [Required]
-        public string BancoDestino { get; set; } = null!;
-
-        [Required]
-        public string CuentaDestino { get; set; } = null!;
+        public int CuentaBancariaEmpresaId { get; set; }
     }
 
     public class AcreditarChequeTerceroRequest
     {
         [Required]
         public DateTime FechaAcreditacion { get; set; }
+    }
+
+    public class RechazarChequeTerceroRequest
+    {
+        [Required]
+        public DateTime FechaRechazo { get; set; }
+
+        [Required]
+        public string Motivo { get; set; } = null!;
     }
 }

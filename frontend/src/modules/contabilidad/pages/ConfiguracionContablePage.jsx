@@ -13,7 +13,10 @@ const conceptoDescriptions = {
   IVA_DEBITO: 'IVA Debito Fiscal',
   PERCEPCION_IIBB: 'Percepcion de Ingresos Brutos',
   CAJA: 'Caja',
-  BANCO: 'Banco',
+  BANCO: 'Banco / Cuenta bancaria propia',
+  CHEQUES_TERCEROS: 'Valores a depositar',
+  RETENCION_GANANCIAS_SUFRIDA: 'Retencion de Ganancias sufrida',
+  RETENCION_IIBB_SUFRIDA: 'Retencion de IIBB sufrida',
   RETENCIONES: 'Retenciones',
 };
 

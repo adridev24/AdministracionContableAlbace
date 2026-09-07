@@ -3,6 +3,7 @@ using System;
 using BudgetControl.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BudgetControl.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260903133532_RechazoChequesTerceros")]
+    partial class RechazoChequesTerceros
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -314,10 +317,6 @@ namespace BudgetControl.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("fecha_alta");
 
-                    b.Property<DateTime?>("FechaModificacion")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("fecha_modificacion");
-
                     b.Property<string>("Nombre")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -333,11 +332,6 @@ namespace BudgetControl.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("usuario_alta");
-
-                    b.Property<string>("UsuarioModificacion")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("usuario_modificacion");
 
                     b.HasKey("Id");
 
@@ -502,10 +496,6 @@ namespace BudgetControl.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("AsientoContableAcreditacionId")
-                        .HasColumnType("integer")
-                        .HasColumnName("asiento_contable_acreditacion_id");
-
                     b.Property<int?>("AsientoContableRechazoId")
                         .HasColumnType("integer")
                         .HasColumnName("asiento_contable_rechazo_id");
@@ -522,10 +512,6 @@ namespace BudgetControl.Api.Migrations
                     b.Property<int>("CobranzaMedioPagoId")
                         .HasColumnType("integer")
                         .HasColumnName("cobranza_medio_pago_id");
-
-                    b.Property<int?>("CuentaBancariaEmpresaId")
-                        .HasColumnType("integer")
-                        .HasColumnName("cuenta_bancaria_empresa_id");
 
                     b.Property<string>("CuentaDestino")
                         .HasMaxLength(100)
@@ -633,9 +619,6 @@ namespace BudgetControl.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AsientoContableAcreditacionId")
-                        .HasDatabaseName("ix_cheques_terceros_asiento_acreditacion_id");
-
                     b.HasIndex("AsientoContableRechazoId")
                         .HasDatabaseName("ix_cheques_terceros_asiento_rechazo_id");
 
@@ -645,9 +628,6 @@ namespace BudgetControl.Api.Migrations
                     b.HasIndex("CobranzaMedioPagoId")
                         .IsUnique()
                         .HasDatabaseName("ix_cheques_terceros_cobranza_medio_pago_id");
-
-                    b.HasIndex("CuentaBancariaEmpresaId")
-                        .HasDatabaseName("ix_cheques_terceros_cuenta_bancaria_empresa_id");
 
                     b.HasIndex("Estado")
                         .HasDatabaseName("ix_cheques_terceros_estado");
@@ -3547,103 +3527,6 @@ namespace BudgetControl.Api.Migrations
                     b.ToTable("ventas_percepciones_iibb_aplicadas", (string)null);
                 });
 
-            modelBuilder.Entity("BudgetControl.Api.Models.Treasury.CuentaBancariaEmpresa", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("Activa")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("activa");
-
-                    b.Property<string>("AliasCbu")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("alias_cbu");
-
-                    b.Property<int>("BancoId")
-                        .HasColumnType("integer")
-                        .HasColumnName("banco_id");
-
-                    b.Property<string>("Cbu")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("cbu");
-
-                    b.Property<int>("CuentaContableId")
-                        .HasColumnType("integer")
-                        .HasColumnName("cuenta_contable_id");
-
-                    b.Property<string>("Descripcion")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("descripcion");
-
-                    b.Property<DateTime>("FechaAlta")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("fecha_alta");
-
-                    b.Property<DateTime?>("FechaModificacion")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("fecha_modificacion");
-
-                    b.Property<string>("MonedaCodigo")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("moneda_codigo");
-
-                    b.Property<string>("NumeroCuenta")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("numero_cuenta");
-
-                    b.Property<string>("TipoCuenta")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("tipo_cuenta");
-
-                    b.Property<string>("UsuarioAlta")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("usuario_alta");
-
-                    b.Property<string>("UsuarioModificacion")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("usuario_modificacion");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Activa")
-                        .HasDatabaseName("ix_cuentas_bancarias_empresa_activa");
-
-                    b.HasIndex("BancoId")
-                        .HasDatabaseName("ix_cuentas_bancarias_empresa_banco_id");
-
-                    b.HasIndex("CuentaContableId")
-                        .HasDatabaseName("ix_cuentas_bancarias_empresa_cuenta_contable_id");
-
-                    b.HasIndex("MonedaCodigo")
-                        .HasDatabaseName("ix_cuentas_bancarias_empresa_moneda");
-
-                    b.HasIndex("BancoId", "NumeroCuenta", "MonedaCodigo")
-                        .IsUnique()
-                        .HasDatabaseName("ix_cuentas_bancarias_empresa_banco_numero_moneda");
-
-                    b.ToTable("cuentas_bancarias_empresa", (string)null);
-                });
-
             modelBuilder.Entity("BudgetControl.Api.Models.User", b =>
                 {
                     b.Property<int>("Id")
@@ -3743,11 +3626,6 @@ namespace BudgetControl.Api.Migrations
 
             modelBuilder.Entity("BudgetControl.Api.Models.Collections.ChequeTercero", b =>
                 {
-                    b.HasOne("BudgetControl.Api.Models.Accounting.AsientoContable", "AsientoContableAcreditacion")
-                        .WithMany()
-                        .HasForeignKey("AsientoContableAcreditacionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("BudgetControl.Api.Models.Accounting.AsientoContable", "AsientoContableRechazo")
                         .WithMany()
                         .HasForeignKey("AsientoContableRechazoId")
@@ -3765,20 +3643,11 @@ namespace BudgetControl.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("BudgetControl.Api.Models.Treasury.CuentaBancariaEmpresa", "CuentaBancariaEmpresa")
-                        .WithMany("ChequesDepositados")
-                        .HasForeignKey("CuentaBancariaEmpresaId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("AsientoContableAcreditacion");
-
                     b.Navigation("AsientoContableRechazo");
 
                     b.Navigation("BancoCatalogo");
 
                     b.Navigation("CobranzaMedioPago");
-
-                    b.Navigation("CuentaBancariaEmpresa");
                 });
 
             modelBuilder.Entity("BudgetControl.Api.Models.Collections.CobranzaAplicacionFactura", b =>
@@ -4162,25 +4031,6 @@ namespace BudgetControl.Api.Migrations
                     b.Navigation("Venta");
                 });
 
-            modelBuilder.Entity("BudgetControl.Api.Models.Treasury.CuentaBancariaEmpresa", b =>
-                {
-                    b.HasOne("BudgetControl.Api.Models.Collections.BancoCobranza", "Banco")
-                        .WithMany("CuentasBancariasEmpresa")
-                        .HasForeignKey("BancoId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BudgetControl.Api.Models.Accounting.CuentaContable", "CuentaContable")
-                        .WithMany()
-                        .HasForeignKey("CuentaContableId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Banco");
-
-                    b.Navigation("CuentaContable");
-                });
-
             modelBuilder.Entity("BudgetControl.Api.Models.UserRole", b =>
                 {
                     b.HasOne("BudgetControl.Api.Models.Role", "Role")
@@ -4215,8 +4065,6 @@ namespace BudgetControl.Api.Migrations
             modelBuilder.Entity("BudgetControl.Api.Models.Collections.BancoCobranza", b =>
                 {
                     b.Navigation("CobranzasMediosPago");
-
-                    b.Navigation("CuentasBancariasEmpresa");
                 });
 
             modelBuilder.Entity("BudgetControl.Api.Models.Collections.Cobranza", b =>
@@ -4324,11 +4172,6 @@ namespace BudgetControl.Api.Migrations
                     b.Navigation("Detalles");
 
                     b.Navigation("PercepcionesIibb");
-                });
-
-            modelBuilder.Entity("BudgetControl.Api.Models.Treasury.CuentaBancariaEmpresa", b =>
-                {
-                    b.Navigation("ChequesDepositados");
                 });
 
             modelBuilder.Entity("BudgetControl.Api.Models.User", b =>

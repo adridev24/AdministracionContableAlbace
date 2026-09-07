@@ -16,6 +16,7 @@ const carteraChequesService = {
   getCheque: (id) => apiClient.get(`/api/cartera-cheques/${id}`).then((res) => res.data),
   depositar: (id, payload) => apiClient.post(`/api/cartera-cheques/${id}/depositar`, payload).then((res) => res.data),
   acreditar: (id, payload) => apiClient.post(`/api/cartera-cheques/${id}/acreditar`, payload).then((res) => res.data),
+  rechazar: (id, payload) => apiClient.post(`/api/cartera-cheques/${id}/rechazar`, payload).then((res) => res.data),
 };
 
 export default carteraChequesService;

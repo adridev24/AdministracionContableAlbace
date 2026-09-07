@@ -70,5 +70,18 @@ namespace BudgetControl.Api.Controllers.Collections
                 return BadRequest(new { error = ex.Message });
             }
         }
+
+        [HttpPost("{id}/rechazar")]
+        public async Task<IActionResult> Rechazar(int id, [FromBody] RechazarChequeTerceroRequest request)
+        {
+            try
+            {
+                return Ok(await _service.RechazarAsync(id, request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
     }
 }

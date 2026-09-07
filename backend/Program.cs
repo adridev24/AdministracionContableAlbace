@@ -12,6 +12,7 @@ using BudgetControl.Api.Services.Accounting;
 using BudgetControl.Api.Services.Collections;
 using BudgetControl.Api.Services.Commercial;
 using BudgetControl.Api.Services.Sales;
+using BudgetControl.Api.Services.Treasury;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -88,6 +89,7 @@ builder.Services.AddScoped<IConfiguracionesContablesService, ConfiguracionesCont
 builder.Services.AddScoped<IContabilizacionAutomaticaService, ContabilizacionAutomaticaService>();
 builder.Services.AddScoped<ICobranzasService, CobranzasService>();
 builder.Services.AddScoped<ICarteraChequesService, CarteraChequesService>();
+builder.Services.AddScoped<ITesoreriaService, TesoreriaService>();
 builder.Services.AddScoped<IExternalDataService, ExternalDataService>();
 builder.Services.AddScoped<ICalculadorVentasService, CalculadorVentasService>();
 builder.Services.AddScoped<IPercepcionIibbService, PercepcionIibbService>();

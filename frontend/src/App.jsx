@@ -5,6 +5,7 @@ import Dashboard from './Components/Dashboard';
 import { comercialRoutes } from './modules/comercial';
 import { contabilidadRoutes } from './modules/contabilidad';
 import { cobranzasRoutes } from './modules/cobranzas';
+import { tesoreriaRoutes } from './modules/tesoreria';
 import { ventasRoutes } from './modules/ventas';
 
 function App() {
@@ -42,6 +43,13 @@ function App() {
           />
         ))}
         {cobranzasRoutes.map((route) => (
+          <Route
+            key={route.path}
+            path={route.path}
+            element={isAuthenticated ? route.element : <Navigate to="/login" />}
+          />
+        ))}
+        {tesoreriaRoutes.map((route) => (
           <Route
             key={route.path}
             path={route.path}
