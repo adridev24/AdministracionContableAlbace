@@ -1,3 +1,4 @@
+import { formatCalendarDate } from '../../../shared/utils/calendarDate';
 import React from 'react';
 import Badge from '../../../shared/components/Badge';
 
@@ -26,7 +27,7 @@ const CuotasComercialesTable = ({ cuotas, onAdjustCuota }) => {
             <tr key={cuota.id}>
               <td>{cuota.numeroCuota}</td>
               <td>{cuota.tipoCuota}</td>
-              <td>{new Date(cuota.fechaVencimiento).toLocaleDateString()}</td>
+              <td>{formatCalendarDate(cuota.fechaVencimiento)}</td>
               <td>{cuota.importeOriginal.toLocaleString()}</td>
               <td>{cuota.importePagado.toLocaleString()}</td>
               <td>{cuota.saldoPendiente.toLocaleString()}</td>

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { calendarDateToApi } from '../../../shared/utils/calendarDate';
 
 const PlanPagoForm = ({ onSubmit, loading }) => {
   const [form, setForm] = useState({
     tieneAnticipo: false,
     montoAnticipo: '',
+    fechaAnticipo: '',
     cantidadCuotas: '1',
     fechaPrimerVencimiento: '',
     periodicidad: 'Mensual',
@@ -15,7 +17,8 @@ const PlanPagoForm = ({ onSubmit, loading }) => {
     const { name, value, type, checked } = e.target;
     setForm({
       ...form,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : value,
+      ...(name === 'tieneAnticipo' && !checked ? { fechaAnticipo: '', montoAnticipo: '' } : {})
     });
   };
 
@@ -34,12 +37,18 @@ const PlanPagoForm = ({ onSubmit, loading }) => {
       return;
     }
 
+    if (!calendarDateToApi(form.fechaPrimerVencimiento) || (form.tieneAnticipo && !calendarDateToApi(form.fechaAnticipo))) {
+      setError('Complete las fechas de vencimiento con fechas válidas.');
+      return;
+    }
+
     setError('');
     onSubmit({
       ...form,
       montoAnticipo: Number(form.montoAnticipo),
       cantidadCuotas,
-      fechaPrimerVencimiento: new Date(form.fechaPrimerVencimiento).toISOString()
+      fechaAnticipo: form.tieneAnticipo ? calendarDateToApi(form.fechaAnticipo) : null,
+      fechaPrimerVencimiento: calendarDateToApi(form.fechaPrimerVencimiento)
     });
   };
 
@@ -55,12 +64,18 @@ const PlanPagoForm = ({ onSubmit, loading }) => {
         <label>Monto de Anticipo</label>
         <input type="number" min="0" step="0.01" name="montoAnticipo" value={form.montoAnticipo} onChange={handleChange} disabled={!form.tieneAnticipo} />
       </div>
+      {form.tieneAnticipo && (
+          <div className="form-field">
+            <label htmlFor="fechaAnticipo">Fecha de vencimiento del anticipo</label>
+            <input id="fechaAnticipo" type="date" name="fechaAnticipo" value={form.fechaAnticipo} onChange={handleChange} required />
+          </div>
+      )}
       <div className="form-field">
         <label>Cantidad de Cuotas</label>
         <input type="number" min="1" name="cantidadCuotas" value={form.cantidadCuotas} onChange={handleChange} required />
       </div>
       <div className="form-field">
-        <label>Fecha primer vencimiento</label>
+        <label>Fecha del primer vencimiento</label>
         <input type="date" name="fechaPrimerVencimiento" value={form.fechaPrimerVencimiento} onChange={handleChange} required />
       </div>
       <div className="form-field">

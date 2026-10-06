@@ -59,6 +59,8 @@ namespace BudgetControl.Api.DTOs.Commercial
 
     public class CreatePlanPagoRequest
     {
+        public DateTime? FechaAnticipo { get; set; }
+
         [Required]
         public bool TieneAnticipo { get; set; }
 
@@ -78,6 +80,8 @@ namespace BudgetControl.Api.DTOs.Commercial
 
     public class UpdatePlanPagoRequest
     {
+        public DateTime? FechaAnticipo { get; set; }
+
         [Required]
         public bool TieneAnticipo { get; set; }
 

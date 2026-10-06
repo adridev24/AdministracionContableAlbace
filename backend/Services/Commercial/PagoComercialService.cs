@@ -333,7 +333,7 @@ namespace BudgetControl.Api.Services.Commercial
                 cuota.Estado = CuotaEstado.Pagada;
                 return;
             }
-            if (cuota.FechaVencimiento < DateTime.UtcNow && cuota.ImportePagado == 0)
+            if (CommercialCalendar.IsOverdue(cuota.FechaVencimiento) && cuota.ImportePagado == 0)
             {
                 cuota.Estado = CuotaEstado.Vencida;
                 return;

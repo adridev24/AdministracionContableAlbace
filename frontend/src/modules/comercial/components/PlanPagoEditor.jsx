@@ -1,12 +1,6 @@
+import { calendarDateValue as parseDateValue, calendarDateToApi } from '../../../shared/utils/calendarDate';
 import React, { useEffect, useMemo, useState } from 'react';
 import '../comercial.css';
-
-const parseDateValue = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toISOString().slice(0, 10);
-};
 
 const isAnticipo = (cuota) => cuota.tipoCuota === 'Anticipo';
 
@@ -20,6 +14,7 @@ const PlanPagoEditor = ({ planPago, viaMonto = 0, monedaCodigo = '', onSave, loa
   useEffect(() => {
     setPlan({
       ...planPago,
+      fechaAnticipo: parseDateValue(planPago.cuotas.find(isAnticipo)?.fechaVencimiento),
       fechaPrimerVencimiento: parseDateValue(planPago.fechaPrimerVencimiento),
       cuotas: planPago.cuotas.map((cuota) => ({
         ...cuota,
@@ -82,16 +77,27 @@ const PlanPagoEditor = ({ planPago, viaMonto = 0, monedaCodigo = '', onSave, loa
       return;
     }
 
+    if (plan.tieneAnticipo && (!parseDateValue(plan.fechaAnticipo) || parseDateValue(plan.fechaAnticipo) === '0001-01-01')) {
+      setLocalError('La fecha de vencimiento del anticipo es obligatoria y debe ser válida.');
+      return;
+    }
+
+    if (!parseDateValue(plan.fechaPrimerVencimiento) || plan.cuotas.some((cuota) => !isAnticipo(cuota) && !parseDateValue(cuota.fechaVencimiento))) {
+      setLocalError('Complete las fechas de vencimiento con fechas válidas.');
+      return;
+    }
+
     const payload = {
       tieneAnticipo: Boolean(plan.tieneAnticipo),
+      fechaAnticipo: plan.tieneAnticipo ? calendarDateToApi(plan.fechaAnticipo) : null,
       montoAnticipo: Number(plan.tieneAnticipo ? plan.montoAnticipo || 0 : 0),
       cantidadCuotas: Number(plan.cantidadCuotas || 0),
-      fechaPrimerVencimiento: new Date(plan.fechaPrimerVencimiento).toISOString(),
+      fechaPrimerVencimiento: calendarDateToApi(plan.fechaPrimerVencimiento),
       periodicidad: plan.periodicidad,
       observaciones: plan.observaciones,
-      cuotas: plan.cuotas.map((cuota) => ({
+      cuotas: plan.cuotas.filter((cuota) => !isAnticipo(cuota)).map((cuota) => ({
         id: cuota.id,
-        fechaVencimiento: new Date(cuota.fechaVencimiento).toISOString(),
+        fechaVencimiento: calendarDateToApi(cuota.fechaVencimiento),
         importeOriginal: Number(cuota.importeOriginal || 0)
       }))
     };
@@ -144,6 +150,19 @@ const PlanPagoEditor = ({ planPago, viaMonto = 0, monedaCodigo = '', onSave, loa
             disabled={readOnly || !plan.tieneAnticipo}
           />
         </div>
+        {plan.tieneAnticipo && (
+          <div>
+            <label htmlFor="editorFechaAnticipo">Fecha de vencimiento del anticipo</label>
+            <input
+              id="editorFechaAnticipo"
+              type="date"
+              value={plan.fechaAnticipo || ''}
+              onChange={(e) => handlePlanField('fechaAnticipo', e.target.value)}
+              required
+              disabled={readOnly}
+            />
+          </div>
+        )}
         <div>
           <strong>Total cuotas</strong>
           <p>{money(totalCuotas, monedaCodigo)}</p>
@@ -184,9 +203,11 @@ const PlanPagoEditor = ({ planPago, viaMonto = 0, monedaCodigo = '', onSave, loa
                   <input
                     type="date"
                     className="table-input"
-                    value={cuota.fechaVencimiento}
-                    onChange={(e) => handleCuotaField(cuota.id, 'fechaVencimiento', e.target.value)}
-                    disabled={readOnly}
+                    value={isAnticipo(cuota) ? (plan.tieneAnticipo ? plan.fechaAnticipo || '' : cuota.fechaVencimiento) : cuota.fechaVencimiento}
+                    onChange={(e) => isAnticipo(cuota)
+                      ? handlePlanField('fechaAnticipo', e.target.value)
+                      : handleCuotaField(cuota.id, 'fechaVencimiento', e.target.value)}
+                    disabled={readOnly || (isAnticipo(cuota) && !plan.tieneAnticipo)}
                   />
                 </td>
                 <td>

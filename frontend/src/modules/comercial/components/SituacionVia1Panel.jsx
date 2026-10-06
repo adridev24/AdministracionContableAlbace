@@ -1,15 +1,10 @@
+import { formatCalendarDate } from '../../../shared/utils/calendarDate';
 import { useEffect, useState } from 'react';
 import SituacionVia1DetalleModal from './SituacionVia1DetalleModal';
 import acuerdosService from '../services/acuerdosService';
 
 const currency = (value, moneda = 'ARS') =>
   `${moneda ? `${moneda} ` : ''}${Number(value || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
-
-const formatDate = (value) => {
-  if (!value) return '-';
-  const [year, month, day] = String(value).slice(0, 10).split('-');
-  return year && month && day ? `${day}/${month}/${year}` : '-';
-};
 
 const estadoLabel = {
   SIN_FACTURAR: 'Sin facturar',
@@ -106,7 +101,7 @@ const SituacionVia1Panel = ({ acuerdoId, enabled }) => {
                     {situacion.obligaciones.map((obligacion) => (
                       <tr key={obligacion.obligacionId}>
                         <td>{obligacion.tipo} {obligacion.numero}</td>
-                        <td>{formatDate(obligacion.fechaVencimiento)}</td>
+                        <td>{formatCalendarDate(obligacion.fechaVencimiento)}</td>
                         <td>{currency(obligacion.importePrevisto, moneda)}</td>
                         <td>{currency(obligacion.importeFacturado, moneda)}</td>
                         <td>{currency(obligacion.pendienteFacturar, moneda)}</td>
