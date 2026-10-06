@@ -1,8 +1,9 @@
+import { formatCalendarDate } from '../../../shared/utils/calendarDate';
 import { useEffect, useMemo, useState } from 'react';
 import SectionCard from '../../../shared/components/SectionCard';
 import ventasService from '../services/ventasService';
 
-const formatDate = (value) => (value ? new Date(value).toLocaleDateString('es-AR') : '-');
+const formatDate = formatCalendarDate;
 const formatMoney = (value) => Number(value || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const getErrorMessage = (error) => error?.response?.data?.error || 'No se pudieron guardar las aplicaciones al plan.';

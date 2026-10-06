@@ -1,3 +1,4 @@
+import { formatCalendarDate } from '../../../shared/utils/calendarDate';
 import { useEffect, useState } from 'react';
 import acuerdosService from '../services/acuerdosService';
 
@@ -52,7 +53,7 @@ const SituacionVia1DetalleModal = ({ acuerdoId, obligacion, monedaCodigo, onClos
         <div className="modal-header">
           <div>
             <h2>{obligacion.tipo} {obligacion.numero}</h2>
-            <p>Vencimiento {formatDate(obligacion.fechaVencimiento)}</p>
+            <p>Vencimiento {formatCalendarDate(obligacion.fechaVencimiento)}</p>
           </div>
           <button className="modal-close" type="button" onClick={onClose} aria-label="Cerrar">x</button>
         </div>

@@ -225,14 +225,14 @@ namespace BudgetControl.Api.Services.Commercial
                 TieneAnticipo = request.TieneAnticipo,
                 MontoAnticipo = request.MontoAnticipo,
                 CantidadCuotas = request.CantidadCuotas,
-                FechaPrimerVencimiento = EnsureUtc(request.FechaPrimerVencimiento),
+                FechaPrimerVencimiento = CommercialCalendar.Normalize(request.FechaPrimerVencimiento),
                 Periodicidad = request.Periodicidad,
                 Observaciones = request.Observaciones
             };
 
             if (request.TieneAnticipo)
             {
-                plan.Cuotas.Add(BuildCuota(0, TipoCuota.Anticipo, request.FechaPrimerVencimiento, request.MontoAnticipo));
+                plan.Cuotas.Add(BuildCuota(0, TipoCuota.Anticipo, request.FechaAnticipo!.Value, request.MontoAnticipo));
             }
 
             var totalRemanente = via.MontoActual - request.MontoAnticipo;
@@ -266,6 +266,13 @@ namespace BudgetControl.Api.Services.Commercial
             var plan = via.PlanPago;
             ValidatePlanUpdateRequest(via, request);
             var cuotasById = plan.Cuotas.ToDictionary(c => c.Id);
+            var anticipoExistente = plan.Cuotas.FirstOrDefault(c => c.TipoCuota == TipoCuota.Anticipo);
+            if (anticipoExistente?.Estado == CuotaEstado.Pagada &&
+                (!request.TieneAnticipo || request.MontoAnticipo != anticipoExistente.ImporteOriginal ||
+                 CommercialCalendar.Normalize(request.FechaAnticipo!.Value) != anticipoExistente.FechaVencimiento))
+            {
+                throw new InvalidOperationException("No se puede modificar un anticipo pagado.");
+            }
 
             foreach (var cuotaRequest in request.Cuotas)
             {
@@ -279,12 +286,24 @@ namespace BudgetControl.Api.Services.Commercial
                     throw new InvalidOperationException("No se puede modificar una cuota pagada.");
                 }
 
+                // The header is authoritative for the advance; reject contradictory duplicates.
+                if (cuota.TipoCuota == TipoCuota.Anticipo)
+                {
+                    if (request.TieneAnticipo &&
+                        (CommercialCalendar.Normalize(cuotaRequest.FechaVencimiento) != CommercialCalendar.Normalize(request.FechaAnticipo!.Value) ||
+                         cuotaRequest.ImporteOriginal != request.MontoAnticipo))
+                    {
+                        throw new InvalidOperationException("La fecha y el importe del anticipo deben coincidir con los datos del plan.");
+                    }
+                    continue;
+                }
+
                 if (cuota.ImportePagado > cuotaRequest.ImporteOriginal)
                 {
                     throw new InvalidOperationException("El importe original no puede ser menor al importe ya pagado.");
                 }
 
-                cuota.FechaVencimiento = EnsureUtc(cuotaRequest.FechaVencimiento);
+                cuota.FechaVencimiento = CommercialCalendar.Normalize(cuotaRequest.FechaVencimiento);
                 cuota.ImporteOriginal = cuotaRequest.ImporteOriginal;
                 cuota.SaldoPendiente = Math.Max(cuota.ImporteOriginal - cuota.ImportePagado, 0);
                 UpdateCuotaEstado(cuota);
@@ -293,11 +312,11 @@ namespace BudgetControl.Api.Services.Commercial
             plan.TieneAnticipo = request.TieneAnticipo;
             plan.MontoAnticipo = request.MontoAnticipo;
             plan.CantidadCuotas = request.CantidadCuotas;
-            plan.FechaPrimerVencimiento = EnsureUtc(request.FechaPrimerVencimiento);
+            plan.FechaPrimerVencimiento = CommercialCalendar.Normalize(request.FechaPrimerVencimiento);
             plan.Periodicidad = request.Periodicidad;
             plan.Observaciones = request.Observaciones;
 
-            SyncAnticipoCuota(plan);
+            SyncAnticipoCuota(plan, request.FechaAnticipo);
             ValidatePlanTotalMatchesVia(via);
             await _db.SaveChangesAsync();
 
@@ -527,7 +546,7 @@ namespace BudgetControl.Api.Services.Commercial
         {
             var desde = DateTime.SpecifyKind(periodoDesde.Date, DateTimeKind.Utc);
             var hasta = DateTime.SpecifyKind(periodoHasta.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
-            var hoy = DateTime.UtcNow.Date;
+            var hoy = CommercialCalendar.Today;
 
             var acuerdosActivos = await GetAcuerdoQuery()
                 .Where(a => a.Estado != AcuerdoEstado.Anulado && a.Estado != AcuerdoEstado.Finalizado)
@@ -657,8 +676,9 @@ namespace BudgetControl.Api.Services.Commercial
 
         public async Task<IEnumerable<CuotaResponse>> GetCuotasVencidasAsync()
         {
+            var hoy = CommercialCalendar.Today;
             var cuotas = await _db.CuotasComerciales
-                .Where(c => c.SaldoPendiente > 0 && c.FechaVencimiento < DateTime.UtcNow && c.Estado != CuotaEstado.Anulada)
+                .Where(c => c.SaldoPendiente > 0 && c.FechaVencimiento < hoy && c.Estado != CuotaEstado.Anulada)
                 .OrderBy(c => c.FechaVencimiento)
                 .ToListAsync();
 
@@ -722,7 +742,7 @@ namespace BudgetControl.Api.Services.Commercial
 
             if (request.NuevaFechaVencimiento.HasValue)
             {
-                cuota.FechaVencimiento = EnsureUtc(request.NuevaFechaVencimiento.Value);
+                cuota.FechaVencimiento = CommercialCalendar.Normalize(request.NuevaFechaVencimiento.Value);
             }
 
             cuota.SaldoPendiente = Math.Max(cuota.ImporteOriginal - cuota.ImportePagado, 0);
@@ -975,6 +995,11 @@ namespace BudgetControl.Api.Services.Commercial
 
         private static void ValidatePlanRequest(AcuerdoComercialVia via, CreatePlanPagoRequest request)
         {
+            if (request.TieneAnticipo && (!request.FechaAnticipo.HasValue || request.FechaAnticipo.Value == default))
+            {
+                throw new InvalidOperationException("La fecha de vencimiento del anticipo es obligatoria.");
+            }
+
             if (request.CantidadCuotas <= 0)
             {
                 throw new InvalidOperationException("La cantidad de cuotas debe ser mayor a cero.");
@@ -998,6 +1023,11 @@ namespace BudgetControl.Api.Services.Commercial
 
         private static void ValidatePlanUpdateRequest(AcuerdoComercialVia via, UpdatePlanPagoRequest request)
         {
+            if (request.TieneAnticipo && (!request.FechaAnticipo.HasValue || request.FechaAnticipo.Value.Date == DateTime.MinValue.Date))
+            {
+                throw new InvalidOperationException("La fecha de vencimiento del anticipo es obligatoria y debe ser válida.");
+            }
+
             if (request.CantidadCuotas <= 0)
             {
                 throw new InvalidOperationException("La cantidad de cuotas debe ser mayor a cero.");
@@ -1065,15 +1095,20 @@ namespace BudgetControl.Api.Services.Commercial
             return Math.Max(via.MontoActual, GetPlanTotal(via.PlanPago));
         }
 
-        private static void SyncAnticipoCuota(PlanPago plan)
+        private static void SyncAnticipoCuota(PlanPago plan, DateTime? fechaAnticipo)
         {
             var anticipoCuota = plan.Cuotas.FirstOrDefault(c => c.TipoCuota == TipoCuota.Anticipo);
 
             if (plan.TieneAnticipo)
             {
+                if (!fechaAnticipo.HasValue || fechaAnticipo.Value.Date == DateTime.MinValue.Date)
+                {
+                    throw new InvalidOperationException("La fecha de vencimiento del anticipo es obligatoria y debe ser válida.");
+                }
+                var vencimiento = CommercialCalendar.Normalize(fechaAnticipo.Value);
                 if (anticipoCuota == null)
                 {
-                    plan.Cuotas.Add(BuildCuota(0, TipoCuota.Anticipo, plan.FechaPrimerVencimiento, plan.MontoAnticipo));
+                    plan.Cuotas.Add(BuildCuota(0, TipoCuota.Anticipo, vencimiento, plan.MontoAnticipo));
                     return;
                 }
 
@@ -1082,8 +1117,15 @@ namespace BudgetControl.Api.Services.Commercial
                     throw new InvalidOperationException("El anticipo no puede ser menor al importe ya pagado.");
                 }
 
+                if (anticipoCuota.Estado == CuotaEstado.Pagada) return;
+                anticipoCuota.FechaVencimiento = vencimiento;
                 anticipoCuota.ImporteOriginal = plan.MontoAnticipo;
                 anticipoCuota.SaldoPendiente = Math.Max(plan.MontoAnticipo - anticipoCuota.ImportePagado, 0);
+                // Reactivate the existing obligation using the explicit advance date.
+                if (anticipoCuota.Estado == CuotaEstado.Anulada)
+                {
+                    anticipoCuota.Estado = CuotaEstado.Pendiente;
+                }
                 UpdateCuotaEstado(anticipoCuota);
                 return;
             }
@@ -1193,18 +1235,18 @@ namespace BudgetControl.Api.Services.Commercial
             {
                 NumeroCuota = numero,
                 TipoCuota = tipo,
-                FechaVencimiento = EnsureUtc(vencimiento),
+                FechaVencimiento = CommercialCalendar.Normalize(vencimiento),
                 ImporteOriginal = importe,
                 ImportePagado = 0,
                 SaldoPendiente = importe,
-                Estado = EnsureUtc(vencimiento) < DateTime.UtcNow ? CuotaEstado.Vencida : CuotaEstado.Pendiente
+                Estado = CommercialCalendar.IsOverdue(vencimiento) ? CuotaEstado.Vencida : CuotaEstado.Pendiente
             };
         }
 
         private static DateTime GetFechaVencimiento(DateTime baseDate, string periodicidad, int offset)
         {
             var normalized = periodicidad?.Trim().ToLowerInvariant() ?? string.Empty;
-            var utcBase = EnsureUtc(baseDate);
+            var utcBase = CommercialCalendar.Normalize(baseDate);
             return normalized switch
             {
                 "quincenal" => utcBase.AddDays(15 * offset),
@@ -1222,7 +1264,7 @@ namespace BudgetControl.Api.Services.Commercial
                 cuota.Estado = CuotaEstado.Pagada;
                 return;
             }
-            if (cuota.FechaVencimiento < DateTime.UtcNow && cuota.ImportePagado == 0)
+            if (CommercialCalendar.IsOverdue(cuota.FechaVencimiento) && cuota.ImportePagado == 0)
             {
                 cuota.Estado = CuotaEstado.Vencida;
                 return;

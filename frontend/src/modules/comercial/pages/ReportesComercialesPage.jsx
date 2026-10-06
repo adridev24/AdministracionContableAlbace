@@ -1,3 +1,4 @@
+import { formatCalendarDate } from '../../../shared/utils/calendarDate';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SectionCard from '../../../shared/components/SectionCard';
@@ -14,12 +15,6 @@ const toDateInputValue = (date) => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-};
-
-const formatDate = (value) => {
-  if (!value) return '-';
-  const [year, month, day] = String(value).slice(0, 10).split('-');
-  return year && month && day ? `${day}/${month}/${year}` : '-';
 };
 
 const getDefaultPeriod = () => {
@@ -245,7 +240,7 @@ const ReportesComercialesPage = () => {
                   <tbody>
                     {resumen.proximosVencimientos.map((cuota) => (
                       <tr key={cuota.cuotaId}>
-                        <td>{formatDate(cuota.fechaVencimiento)}</td>
+                        <td>{formatCalendarDate(cuota.fechaVencimiento)}</td>
                         <td>{cuota.numeroAcuerdo}</td>
                         <td>{clientNames[cuota.clienteExternoId] || cuota.clienteExternoId}</td>
                         <td>{obraNames[cuota.obraExternaId] || cuota.obraExternaId}</td>

@@ -1,12 +1,6 @@
+import { calendarDateValue as parseDateValue, calendarDateToApi } from '../../../shared/utils/calendarDate';
 import React, { useEffect, useState } from 'react';
 import '../comercial.css';
-
-const parseDateValue = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toISOString().slice(0, 10);
-};
 
 const AgregarCuotaModal = ({ open, planPago, onClose, onSave, loading, error }) => {
   const [importeOriginal, setImporteOriginal] = useState('');
@@ -40,7 +34,7 @@ const AgregarCuotaModal = ({ open, planPago, onClose, onSave, loading, error }) 
       return;
     }
 
-    if (!fechaVencimiento) {
+    if (!parseDateValue(fechaVencimiento)) {
       setLocalError('La fecha de vencimiento es obligatoria.');
       return;
     }
@@ -52,7 +46,7 @@ const AgregarCuotaModal = ({ open, planPago, onClose, onSave, loading, error }) 
 
     onSave({
       importeOriginal: importeValue,
-      fechaVencimiento: new Date(fechaVencimiento).toISOString(),
+      fechaVencimiento: calendarDateToApi(fechaVencimiento),
       tipoCuota,
       motivo: motivo.trim()
     });
