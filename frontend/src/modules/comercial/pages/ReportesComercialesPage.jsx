@@ -1,5 +1,6 @@
+import { defaultReportFilters, generalReportFilters, reportQuery, appliedReportFilters, reportCaption } from '../services/reportFilters.js';
 import { formatCalendarDate } from '../../../shared/utils/calendarDate';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SectionCard from '../../../shared/components/SectionCard';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -10,42 +11,36 @@ import '../comercial.css';
 const formatMoney = (value, monedaCodigo = 'ARS') =>
   `${monedaCodigo} ${Number(value || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
 
-const toDateInputValue = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const getDefaultPeriod = () => {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return {
-    desde: toDateInputValue(from),
-    hasta: toDateInputValue(to),
-    via: 'Todos',
-  };
-};
-
 const ReportesComercialesPage = () => {
-  const [period, setPeriod] = useState(getDefaultPeriod);
+  const requestSequence = useRef(0);
+  const [period, setPeriod] = useState(defaultReportFilters);
+  const [applied, setApplied] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [clientNames, setClientNames] = useState({});
   const [obraNames, setObraNames] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const loadResumen = async () => {
+  const loadResumen = async (filters = period) => {
+    const snapshot = { ...filters };
+    try {
+      reportQuery(snapshot);
+    } catch (validationError) {
+      setError(validationError.message);
+      return;
+    }
+    const sequence = ++requestSequence.current;
     setLoading(true);
     setError('');
     try {
-      const data = await reportesComercialesService.getResumen(period);
+      const data = await reportesComercialesService.getResumen(snapshot);
+      if (sequence !== requestSequence.current) return;
       setResumen(data);
+      setApplied(appliedReportFilters(snapshot, data));
     } catch {
-      setError('No se pudo cargar el resumen comercial.');
+      if (sequence === requestSequence.current) setError('No se pudo cargar el resumen comercial.');
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
   };
 
@@ -104,21 +99,24 @@ const ReportesComercialesPage = () => {
           totalVencido: resumen.totalVencido,
         }];
 
+    const isPeriod = resumen.alcance === 'Periodo';
     return totales.map((total) => ({
       monedaCodigo: total.monedaCodigo || 'ARS',
       items: [
-        { label: 'Acordado activo', value: total.totalAcordadoActivo, hint: 'Acuerdos vigentes' },
-        { label: 'Saldo de deuda', value: total.saldoTotalClientes, hint: 'Saldo pendiente activo' },
-        { label: 'A cobrar', value: total.totalPorCobrarPeriodo, hint: `${resumen.cuotasPendientesPeriodo} cuotas` },
-        { label: 'Cobrado', value: total.totalCobradoPeriodo, hint: 'Periodo consultado' },
-        { label: 'Vencido', value: total.totalVencido, hint: `${resumen.cuotasVencidas} cuotas` },
+        { label: isPeriod ? 'Acordado vigente (situación actual)' : 'Acordado vigente', value: total.totalAcordadoActivo, hint: 'Acuerdos vigentes' },
+        { label: isPeriod ? 'Saldo total pendiente (situación actual)' : 'Saldo total pendiente', value: total.saldoTotalClientes, hint: 'Saldo pendiente activo' },
+        { label: isPeriod ? 'Pendiente con vencimiento en el período' : 'Pendiente en obligaciones', value: total.totalPorCobrarPeriodo, hint: `${total.cuotasPendientesPeriodo ?? 0} obligaciones` },
+        { label: isPeriod ? 'Cobrado en el período' : 'Cobrado acumulado', value: total.totalCobradoPeriodo, hint: isPeriod ? 'Rango consultado' : 'Sin límite de fecha' },
+        { label: 'Vencido actualmente', value: total.totalVencido, hint: `${total.cuotasVencidas ?? 0} obligaciones` },
       ],
     }));
   }, [resumen]);
 
   const handlePeriodChange = (event) => {
     const { name, value } = event.target;
-    setPeriod((prev) => ({ ...prev, [name]: value }));
+    setPeriod((prev) => name === 'alcance' && value === 'General'
+      ? generalReportFilters(prev)
+      : { ...prev, [name]: value });
   };
 
   return (
@@ -134,31 +132,45 @@ const ReportesComercialesPage = () => {
       </div>
 
       <SectionCard
-        title="Periodo de consulta"
-        description="Por defecto se muestra el mes actual."
-        actions={(
-          <button className="btn-primary" type="button" onClick={loadResumen} disabled={loading}>
-            {loading ? 'Actualizando...' : 'Actualizar'}
-          </button>
-        )}
+        title="Alcance de consulta"
+        description="Los filtros se aplican al pulsar Actualizar."
       >
-        <div className="report-filter-grid">
-          <div className="form-field">
-            <label>Desde</label>
-            <input type="date" name="desde" value={period.desde} onChange={handlePeriodChange} />
-          </div>
-          <div className="form-field">
-            <label>Hasta</label>
-            <input type="date" name="hasta" value={period.hasta} onChange={handlePeriodChange} />
-          </div>
-          <div className="form-field">
-            <label>Via</label>
-            <select name="via" value={period.via} onChange={handlePeriodChange}>
-              <option value="Todos">Todos</option>
-              <option value="Via1">Via1</option>
-              <option value="Via2">Via2</option>
+        <div className="report-filter-grid report-query-grid">
+          <div className="form-field report-query-alcance">
+            <label htmlFor="report-alcance">Alcance</label>
+            <select id="report-alcance" name="alcance" value={period.alcance} onChange={handlePeriodChange}>
+              <option value="General">Totales generales</option>
+              <option value="Periodo">Por período</option>
             </select>
           </div>
+          <div className="form-field report-query-desde">
+            <label htmlFor="report-desde">Desde</label>
+            <input type="date" id="report-desde" disabled={period.alcance !== 'Periodo'} required={period.alcance === 'Periodo'} name="desde" value={period.desde} onChange={handlePeriodChange} />
+          </div>
+          <div className="form-field report-query-hasta">
+            <label htmlFor="report-hasta">Hasta</label>
+            <input type="date" id="report-hasta" disabled={period.alcance !== 'Periodo'} required={period.alcance === 'Periodo'} name="hasta" value={period.hasta} onChange={handlePeriodChange} />
+          </div>
+          <div className="form-field report-query-via">
+            <label htmlFor="report-via">Vía</label>
+            <select id="report-via" name="via" value={period.via} onChange={handlePeriodChange}>
+              <option value="Todos">Todos</option>
+              <option value="Via1">Vía 1</option>
+              <option value="Via2">Vía 2</option>
+            </select>
+          </div>
+        </div>
+        <div className="report-query-actions">
+          {(period.alcance === 'Periodo' || applied?.alcance === 'Periodo') && (
+            <button className="btn-secondary" type="button" disabled={loading} onClick={() => {
+              const general = generalReportFilters(period);
+              setPeriod(general);
+              loadResumen(general);
+            }}>Ver totales generales</button>
+          )}
+          <button className="btn-primary" type="button" onClick={() => loadResumen()} disabled={loading}>
+            {loading ? 'Actualizando...' : 'Actualizar'}
+          </button>
         </div>
       </SectionCard>
 
@@ -167,6 +179,10 @@ const ReportesComercialesPage = () => {
         <LoadingSpinner />
       ) : resumen && (
         <>
+          <p aria-live="polite">{reportCaption(applied)}</p>
+          <p>El saldo total corresponde al acuerdo completo; el pendiente en obligaciones corresponde a anticipos y cuotas.
+            Pueden diferir cuando existen pagos a cuenta todavía no aplicados.
+            La consulta por período no representa un saldo histórico al cierre.</p>
           <div className="report-currency-groups">
             {totalGroups.map((group) => (
               <div className="report-currency-group" key={group.monedaCodigo}>
@@ -187,7 +203,7 @@ const ReportesComercialesPage = () => {
             ))}
           </div>
 
-          <SectionCard title="Clientes con mayor deuda" description="Ranking para priorizar seguimiento comercial.">
+          <SectionCard title="Clientes con mayor deuda actual" description="Hasta diez clientes por moneda. Situación actual, no detalle conciliatorio del período.">
             {(resumen.clientesConDeuda ?? []).length > 0 ? (
               <div className="table-wrapper">
                 <table className="data-table">
@@ -223,7 +239,7 @@ const ReportesComercialesPage = () => {
             )}
           </SectionCard>
 
-          <SectionCard title="Proximos vencimientos" description="Cuotas pendientes ordenadas por fecha de vencimiento.">
+          <SectionCard title="Próximos vencimientos actuales" description="Hasta diez obligaciones desde hoy, ordenadas por vencimiento. Situación actual, no detalle del período.">
             {(resumen.proximosVencimientos ?? []).length > 0 ? (
               <div className="table-wrapper">
                 <table className="data-table">

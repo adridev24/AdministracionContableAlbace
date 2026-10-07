@@ -50,7 +50,8 @@ await using var transaction = await connection.BeginTransactionAsync();
 // temporary tables. Restrict search_path so EF cannot write to public tables.
 var tables = new[] { "acuerdos_comerciales", "acuerdos_comerciales_vias", "planes_pago", "cuotas_comerciales",
     "pagos_comerciales", "aplicaciones_pago_comerciales", "hitos_comerciales_vias",
-    "ajustes_acuerdos_comerciales_vias", "ajustes_cuotas_comerciales" };
+    "ajustes_acuerdos_comerciales_vias", "ajustes_cuotas_comerciales",
+    "cobranzas", "cobranzas_aplicaciones_facturas", "cobranzas_aplicaciones_obligaciones" };
 foreach (var table in tables)
 {
     await using var clone = new NpgsqlCommand($"CREATE TEMP TABLE {table} (LIKE public.{table} INCLUDING ALL) ON COMMIT DROP", connection, transaction);
@@ -206,6 +207,7 @@ await service.ActualizarPlanPagoAsync(activationVia, Activation(today.AddDays(2)
 db.ChangeTracker.Clear();
 reused = await db.CuotasComerciales.SingleAsync(c => c.Id == activationId);
 Check(reused.Estado == CuotaEstado.Pagada && reused.SaldoPendiente == 0m && reused.FechaVencimiento == today.AddDays(2), "unchanged paid advance remains intact when editing plan");
+await CommercialReportTests.RunAsync(db, connection, transaction, Check);
 await transaction.RollbackAsync();
 Console.WriteLine($"{checks} checks passed; temporary PostgreSQL tables rolled back.");
 

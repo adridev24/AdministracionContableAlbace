@@ -542,57 +542,48 @@ namespace BudgetControl.Api.Services.Commercial
             return MapSaldo(obraExternaId, acuerdos);
         }
 
-        public async Task<ReporteComercialResumenResponse> GetReporteComercialResumenAsync(DateTime periodoDesde, DateTime periodoHasta, ViaOperacion? viaOperacion = null)
+        public async Task<ReporteComercialResumenResponse> GetReporteComercialResumenAsync(DateTime? periodoDesde, DateTime? periodoHasta, ViaOperacion? viaOperacion = null)
         {
-            var desde = DateTime.SpecifyKind(periodoDesde.Date, DateTimeKind.Utc);
-            var hasta = DateTime.SpecifyKind(periodoHasta.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+            if (periodoDesde.HasValue != periodoHasta.HasValue)
+                throw new InvalidOperationException("Debe indicar ambas fechas del período.");
+            if (periodoDesde?.Date > periodoHasta?.Date)
+                throw new InvalidOperationException("La fecha hasta no puede ser anterior a la fecha desde.");
+            DateTime? desde = periodoDesde.HasValue ? CommercialCalendar.Normalize(periodoDesde.Value) : null;
+            DateTime? hasta = periodoHasta.HasValue ? CommercialCalendar.Normalize(periodoHasta.Value).AddTicks(TimeSpan.TicksPerDay - 1) : null;
             var hoy = CommercialCalendar.Today;
 
-            var acuerdosActivos = await GetAcuerdoQuery()
-                .Where(a => a.Estado != AcuerdoEstado.Anulado && a.Estado != AcuerdoEstado.Finalizado)
-                .ToListAsync();
-
-            var viasActivas = acuerdosActivos
-                .SelectMany(a => a.Vias)
-                .Where(IsViaActiva)
-                .Where(v => !viaOperacion.HasValue || v.ViaOperacion == viaOperacion.Value)
-                .ToList();
-            var acuerdosActivosFiltrados = acuerdosActivos
-                .Where(a => a.Vias.Any(v => IsViaActiva(v) && (!viaOperacion.HasValue || v.ViaOperacion == viaOperacion.Value)))
-                .ToList();
+            var viasActivas = await _db.AcuerdosComercialesVias.AsNoTracking()
+                .Where(v => v.Estado != AcuerdoEstado.Anulado && v.Estado != AcuerdoEstado.Finalizado &&
+                    v.AcuerdoComercial.Estado != AcuerdoEstado.Anulado && v.AcuerdoComercial.Estado != AcuerdoEstado.Finalizado &&
+                    (!viaOperacion.HasValue || v.ViaOperacion == viaOperacion.Value))
+                .Include(v => v.AcuerdoComercial)
+                .Include(v => v.PlanPago).ThenInclude(p => p!.Cuotas)
+                .AsSplitQuery().ToListAsync();
             var cuotasPendientes = viasActivas
                 .SelectMany(v => v.PlanPago?.Cuotas ?? Enumerable.Empty<CuotaComercial>())
                 .Where(c => c.SaldoPendiente > 0 && c.Estado != CuotaEstado.Pagada && c.Estado != CuotaEstado.Anulada)
                 .ToList();
 
-            cuotasPendientes.ForEach(UpdateCuotaEstado);
-            await _db.SaveChangesAsync();
-
-            var pagosPeriodo = await _db.PagosComerciales
-                .Include(p => p.AcuerdoComercialVia)
-                .Where(p => p.Estado != PagoEstado.Anulado && p.FechaPago >= desde && p.FechaPago <= hasta)
-                .ToListAsync();
-
-            if (viaOperacion.HasValue)
-            {
-                pagosPeriodo = pagosPeriodo.Where(p => p.AcuerdoComercialVia != null && p.AcuerdoComercialVia.ViaOperacion == viaOperacion.Value).ToList();
-            }
-
             var viaIds = viasActivas.Select(v => v.Id).ToList();
+            var pagos = await _db.PagosComerciales.AsNoTracking()
+                .Where(p => viaIds.Contains(p.AcuerdoComercialViaId) && p.Estado != PagoEstado.Anulado &&
+                    p.AcuerdoComercialVia.ViaOperacion == ViaOperacion.Via2)
+                .Select(p => new { p.AcuerdoComercialViaId, p.MonedaCodigo, p.FechaPago, p.ImporteTotal })
+                .ToListAsync();
+            var pagosPeriodo = pagos.Where(p => !desde.HasValue || (p.FechaPago >= desde.Value && p.FechaPago <= hasta!.Value)).ToList();
+            var cobradoVia2PorVia = pagos.GroupBy(p => (p.AcuerdoComercialViaId, Moneda: p.MonedaCodigo.ToUpperInvariant()))
+                .ToDictionary(g => g.Key, g => g.Sum(p => p.ImporteTotal));
             var cobradoVia1PorVia = await BuildCobradoVia1PorViaAsync(viaIds);
-            var cobradoVia1PeriodoPorVia = await BuildCobradoVia1PorViaAsync(viaIds, desde, hasta);
+            var cobradoVia1PeriodoPorVia = desde.HasValue ? await BuildCobradoVia1PorViaAsync(viaIds, desde, hasta) : cobradoVia1PorVia;
 
-            var deudaPorCliente = acuerdosActivosFiltrados
-                .SelectMany(a => a.Vias
-                    .Where(IsViaActiva)
-                    .Where(v => !viaOperacion.HasValue || v.ViaOperacion == viaOperacion.Value)
-                    .Select(v => new { Acuerdo = a, Via = v }))
+            var deudaPorCliente = viasActivas
+                .Select(v => new { Acuerdo = v.AcuerdoComercial, Via = v })
                 .GroupBy(item => new { item.Acuerdo.ClienteExternoId, item.Via.MonedaCodigo })
                 .Select(group =>
                 {
                     var viasGrupo = group.Select(item => item.Via).ToList();
                     var totalAcordado = viasGrupo.Sum(GetMontoVigenteVia);
-                    var totalPagado = viasGrupo.Sum(via => GetTotalCobradoReporteVia(via, cobradoVia1PorVia));
+                    var totalPagado = viasGrupo.Sum(via => via.ViaOperacion == ViaOperacion.Via1 ? cobradoVia1PorVia.GetValueOrDefault(via.Id) : cobradoVia2PorVia.GetValueOrDefault((via.Id, via.MonedaCodigo.ToUpperInvariant())));
                     return new ClienteDeudaReporteResponse
                     {
                         ClienteExternoId = group.Key.ClienteExternoId,
@@ -608,7 +599,7 @@ namespace BudgetControl.Api.Services.Commercial
                 .ThenByDescending(item => item.SaldoPendiente)
                 .ToList();
 
-            var cuotasPeriodo = cuotasPendientes.Where(c => c.FechaVencimiento >= desde && c.FechaVencimiento <= hasta).ToList();
+            var cuotasPeriodo = cuotasPendientes.Where(c => !desde.HasValue || (c.FechaVencimiento >= desde.Value && c.FechaVencimiento <= hasta!.Value)).ToList();
             var cuotasVencidas = cuotasPendientes.Where(c => c.FechaVencimiento.Date < hoy).ToList();
             var monedas = viasActivas.Select(v => v.MonedaCodigo)
                 .Concat(pagosPeriodo.Select(p => p.MonedaCodigo))
@@ -623,12 +614,13 @@ namespace BudgetControl.Api.Services.Commercial
             var totalesPorMoneda = monedas.Select(moneda => new ReporteComercialTotalMonedaResponse
             {
                 MonedaCodigo = moneda,
+                CuotasPendientesPeriodo = cuotasPeriodo.Count(c => c.PlanPago.AcuerdoComercialVia.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase)),
+                CuotasVencidas = cuotasVencidas.Count(c => c.PlanPago.AcuerdoComercialVia.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase)),
                 TotalAcordadoActivo = viasActivas
                     .Where(v => v.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase))
                     .Sum(GetMontoVigenteVia),
                 TotalCobradoPeriodo = pagosPeriodo
-                    .Where(p => p.AcuerdoComercialVia?.ViaOperacion != ViaOperacion.Via1 &&
-                        p.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase))
+                    .Where(p => p.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase))
                     .Sum(p => p.ImporteTotal),
                 TotalPorCobrarPeriodo = cuotasPeriodo
                     .Where(c => c.PlanPago.AcuerdoComercialVia.MonedaCodigo.Equals(moneda, StringComparison.OrdinalIgnoreCase))
@@ -653,23 +645,30 @@ namespace BudgetControl.Api.Services.Commercial
 
             return new ReporteComercialResumenResponse
             {
+                Alcance = desde.HasValue ? "Periodo" : "General",
                 PeriodoDesde = desde,
-                PeriodoHasta = hasta,
+                PeriodoHasta = periodoHasta.HasValue ? CommercialCalendar.Normalize(periodoHasta.Value) : null,
                 TotalAcordadoActivo = unicoTotal?.TotalAcordadoActivo ?? 0,
                 TotalCobradoPeriodo = unicoTotal?.TotalCobradoPeriodo ?? 0,
                 TotalPorCobrarPeriodo = unicoTotal?.TotalPorCobrarPeriodo ?? 0,
                 TotalVencido = unicoTotal?.TotalVencido ?? 0,
                 SaldoTotalClientes = unicoTotal?.SaldoTotalClientes ?? 0,
-                AcuerdosActivos = acuerdosActivosFiltrados.Count,
+                AcuerdosActivos = viasActivas.Select(v => v.AcuerdoComercialId).Distinct().Count(),
                 CuotasPendientesPeriodo = cuotasPeriodo.Count,
                 CuotasVencidas = cuotasVencidas.Count,
                 TotalesPorMoneda = totalesPorMoneda,
-                ClientesConDeuda = deudaPorCliente.Take(10).ToList(),
+                ClientesConDeuda = deudaPorCliente.GroupBy(d => d.MonedaCodigo).SelectMany(g => g.Take(10)).ToList(),
                 ProximosVencimientos = cuotasPendientes
                     .Where(c => c.FechaVencimiento >= hoy)
                     .OrderBy(c => c.FechaVencimiento)
                     .Take(10)
-                    .Select(MapCuotaReporte)
+                    .Select(c =>
+                    {
+                        var result = MapCuotaReporte(c);
+                        result.Estado = c.Estado == CuotaEstado.Parcial || c.ImportePagado > 0 ? CuotaEstado.Parcial :
+                            c.FechaVencimiento.Date < hoy ? CuotaEstado.Vencida : CuotaEstado.Pendiente;
+                        return result;
+                    })
                     .ToList()
             };
         }

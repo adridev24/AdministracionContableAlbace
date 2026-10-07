@@ -924,3 +924,69 @@
     flex-direction: column;
   }
 }
+
+/* Report query layout only; other commercial forms retain their existing grid. */
+.report-filter-grid.report-query-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-areas: "alcance desde hasta via";
+  align-items: end;
+}
+
+.report-query-alcance { grid-area: alcance; }
+.report-query-desde { grid-area: desde; }
+.report-query-hasta { grid-area: hasta; }
+.report-query-via { grid-area: via; }
+
+.report-query-grid .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.report-query-grid label {
+  margin: 0;
+}
+
+.report-query-grid input,
+.report-query-grid select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+}
+
+.report-query-grid input:disabled {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.report-query-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 1100px) {
+  .report-filter-grid.report-query-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: "alcance via" "desde hasta";
+  }
+}
+
+@media (max-width: 640px) {
+  .report-filter-grid.report-query-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "alcance" "desde" "hasta" "via";
+  }
+
+  .report-query-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
