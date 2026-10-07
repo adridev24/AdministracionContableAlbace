@@ -228,12 +228,18 @@ namespace BudgetControl.Api.DTOs.Commercial
 
     public class ReporteComercialResumenResponse
     {
-        public DateTime PeriodoDesde { get; set; }
-        public DateTime PeriodoHasta { get; set; }
+        public string Alcance { get; set; } = "General";
+        public DateTime? PeriodoDesde { get; set; }
+        public DateTime? PeriodoHasta { get; set; }
+        // Current active agreement amounts, independent of the selected period.
         public decimal TotalAcordadoActivo { get; set; }
+        // General: accumulated receipts; Periodo: receipts within the inclusive date range.
         public decimal TotalCobradoPeriodo { get; set; }
+        // Current outstanding obligations: all deadlines in General, selected deadlines in Periodo.
         public decimal TotalPorCobrarPeriodo { get; set; }
+        // Current overdue balance according to the Argentina business calendar.
         public decimal TotalVencido { get; set; }
+        // Sum by customer/currency of max(current agreed - accumulated receipts, 0), never historical.
         public decimal SaldoTotalClientes { get; set; }
         public int AcuerdosActivos { get; set; }
         public int CuotasPendientesPeriodo { get; set; }
@@ -245,11 +251,18 @@ namespace BudgetControl.Api.DTOs.Commercial
 
     public class ReporteComercialTotalMonedaResponse
     {
+        public int CuotasPendientesPeriodo { get; set; }
+        public int CuotasVencidas { get; set; }
         public string MonedaCodigo { get; set; } = null!;
+        // Current active agreement amounts, independent of the selected period.
         public decimal TotalAcordadoActivo { get; set; }
+        // General: accumulated receipts; Periodo: receipts within the inclusive date range.
         public decimal TotalCobradoPeriodo { get; set; }
+        // Current outstanding obligations: all deadlines in General, selected deadlines in Periodo.
         public decimal TotalPorCobrarPeriodo { get; set; }
+        // Current overdue balance according to the Argentina business calendar.
         public decimal TotalVencido { get; set; }
+        // Sum by customer/currency of max(current agreed - accumulated receipts, 0), never historical.
         public decimal SaldoTotalClientes { get; set; }
     }
 

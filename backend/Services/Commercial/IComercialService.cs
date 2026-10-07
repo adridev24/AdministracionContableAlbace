@@ -20,7 +20,7 @@ namespace BudgetControl.Api.Services.Commercial
         Task<IEnumerable<AcuerdoSituacionVia1CobranzaResponse>> ObtenerCobranzasSituacionVia1Async(int acuerdoId, int obligacionId);
         Task<SaldoComercialResponse> GetSaldoComercialClienteAsync(string clienteExternoId);
         Task<SaldoComercialResponse> GetSaldoComercialObraAsync(string obraExternaId);
-        Task<ReporteComercialResumenResponse> GetReporteComercialResumenAsync(DateTime periodoDesde, DateTime periodoHasta, BudgetControl.Api.Models.Commercial.ViaOperacion? viaOperacion = null);
+        Task<ReporteComercialResumenResponse> GetReporteComercialResumenAsync(DateTime? periodoDesde, DateTime? periodoHasta, BudgetControl.Api.Models.Commercial.ViaOperacion? viaOperacion = null);
         Task<IEnumerable<CuotaResponse>> GetCuotasVencidasAsync();
         Task<IEnumerable<CuotaResponse>> GetCuotasPendientesAsync();
         Task<CuotaResponse> AjustarCuotaAsync(int cuotaId, AjusteCuotaRequest request);
