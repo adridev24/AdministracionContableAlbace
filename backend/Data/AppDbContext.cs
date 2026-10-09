@@ -5,6 +5,7 @@ using BudgetControl.Api.Models.Collections;
 using BudgetControl.Api.Models.Commercial;
 using BudgetControl.Api.Models.Sales;
 using BudgetControl.Api.Models.Treasury;
+using BudgetControl.Api.Data.Configurations;
 
 namespace BudgetControl.Api.Data
 {
@@ -13,6 +14,8 @@ namespace BudgetControl.Api.Data
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
         public DbSet<User> Users { get; set; } = null!;
+        public DbSet<RevisionPlanPago> RevisionesPlanesPago { get; set; } = null!;
+        public DbSet<RevisionPlanPagoDetalle> RevisionesPlanesPagoDetalles { get; set; } = null!;
         public DbSet<Role> Roles { get; set; } = null!;
         public DbSet<UserRole> UserRoles { get; set; } = null!;
 
@@ -1412,6 +1415,9 @@ namespace BudgetControl.Api.Data
                     .HasForeignKey(e => e.CobranzaAplicacionFacturaId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
+            modelBuilder.ApplyConfiguration(new RevisionPlanPagoConfiguration());
+            modelBuilder.ApplyConfiguration(new RevisionPlanPagoDetalleConfiguration());
+            PlanRevisionConcurrencyConfiguration.Configure(modelBuilder);
         }
 
         private static TipoComprobanteVenta BuildTipoComprobanteSeed(

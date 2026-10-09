@@ -5,6 +5,7 @@ namespace BudgetControl.Api.Models.Commercial
     public class PlanPago
     {
         public int Id { get; set; }
+        public uint Version { get; set; }
         public int? AcuerdoComercialId { get; set; }
         public int AcuerdoComercialViaId { get; set; }
         public bool TieneAnticipo { get; set; }

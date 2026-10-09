@@ -5,6 +5,7 @@ namespace BudgetControl.Api.Models.Commercial
     public class AcuerdoComercialVia
     {
         public int Id { get; set; }
+        public uint Version { get; set; }
         public int AcuerdoComercialId { get; set; }
         public ViaOperacion ViaOperacion { get; set; }
         public ModalidadCobro ModalidadCobro { get; set; }

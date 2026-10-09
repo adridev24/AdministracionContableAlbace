@@ -5,6 +5,7 @@ namespace BudgetControl.Api.Models.Commercial
     public class CuotaComercial
     {
         public int Id { get; set; }
+        public uint Version { get; set; }
         public int PlanPagoId { get; set; }
         public int NumeroCuota { get; set; }
         public TipoCuota TipoCuota { get; set; }
