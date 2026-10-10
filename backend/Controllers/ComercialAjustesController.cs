@@ -32,12 +32,17 @@ namespace BudgetControl.Api.Controllers
         }
 
         [HttpPost("planes/{planPagoId}/cuotas-ajuste")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> AgregarCuota(int planPagoId, [FromBody] AddCuotaAjusteRequest request)
         {
             try
             {
                 var resultado = await _service.AgregarCuotaAjusteAsync(planPagoId, request);
                 return CreatedAtAction(nameof(AjustarCuota), new { cuotaId = resultado.Id }, resultado);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return User.Identity?.IsAuthenticated == true ? Forbid() : Unauthorized();
             }
             catch (InvalidOperationException ex)
             {

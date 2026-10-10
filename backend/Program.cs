@@ -82,6 +82,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContext, CurrentUserService>();
 builder.Services.AddScoped<IComercialService, ComercialService>();
+builder.Services.AddScoped<IRevisionPlanPagoService, RevisionPlanPagoService>();
 builder.Services.AddScoped<IPagoComercialService, PagoComercialService>();
 builder.Services.AddScoped<ICuentasContablesService, CuentasContablesService>();
 builder.Services.AddScoped<IAsientosContablesService, AsientosContablesService>();

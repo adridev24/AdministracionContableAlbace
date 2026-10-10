@@ -5,6 +5,7 @@ using BudgetControl.Api.Models.Commercial;
 using BudgetControl.Api.Models.Sales;
 using BudgetControl.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace BudgetControl.Api.Services.Commercial
 {
@@ -12,11 +13,13 @@ namespace BudgetControl.Api.Services.Commercial
     {
         private readonly AppDbContext _db;
         private readonly IUserContext _userContext;
+        private readonly IHttpContextAccessor? _httpContextAccessor;
 
-        public ComercialService(AppDbContext db, IUserContext userContext)
+        public ComercialService(AppDbContext db, IUserContext userContext, IHttpContextAccessor? httpContextAccessor = null)
         {
             _db = db;
             _userContext = userContext;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<AcuerdoResponse> CreateAcuerdoAsync(CreateAcuerdoRequest request)
@@ -771,6 +774,24 @@ namespace BudgetControl.Api.Services.Commercial
 
         public async Task<CuotaResponse> AgregarCuotaAjusteAsync(int planPagoId, AddCuotaAjusteRequest request)
         {
+            // Defense in depth: direct service callers must also have an authenticated Admin.
+            var user = _httpContextAccessor?.HttpContext?.User;
+            var usuario = user?.FindFirstValue(ClaimTypes.Name);
+            if (user?.Identity?.IsAuthenticated != true || !user.IsInRole("Admin") ||
+                string.IsNullOrWhiteSpace(user.FindFirstValue(ClaimTypes.NameIdentifier)) || string.IsNullOrWhiteSpace(usuario))
+                throw new UnauthorizedAccessException("La operación requiere un Administrador autenticado.");
+
+            if (request.TipoCuota == TipoCuota.Cuota)
+                throw new InvalidOperationException("Las cuotas ordinarias deben agregarse mediante la revisión del plan: /api/comercial/acuerdos-vias/{viaId}/plan-pago/revision.");
+            if (request.TipoCuota is not (TipoCuota.Adicional or TipoCuota.Refuerzo or TipoCuota.Ajuste))
+                throw new InvalidOperationException("Este circuito solo admite Adicional, Refuerzo o Ajuste.");
+            if (string.IsNullOrWhiteSpace(request.Motivo))
+                throw new InvalidOperationException("El motivo del ajuste es obligatorio.");
+            if (request.ImporteOriginal < 0.01m || request.ImporteOriginal != RoundMoney(request.ImporteOriginal))
+                throw new InvalidOperationException("El importe del ajuste debe ser positivo y tener como máximo dos decimales.");
+            if (request.FechaVencimiento.Year < 1900)
+                throw new InvalidOperationException("El vencimiento del ajuste no es válido.");
+
             var plan = await _db.PlanesPago
                 .Include(p => p.AcuerdoComercialVia)
                     .ThenInclude(v => v.AcuerdoComercial)
@@ -788,8 +809,17 @@ namespace BudgetControl.Api.Services.Commercial
                 throw new InvalidOperationException("Solo se pueden agregar cuotas a vías aprobadas o en curso.");
             }
 
+            if (via.AcuerdoComercial.Estado is AcuerdoEstado.Anulado or AcuerdoEstado.Finalizado)
+                throw new InvalidOperationException("El acuerdo no está vigente.");
+            // Reject inconsistent input data rather than carrying its discrepancy forward.
+            var totalVigente = plan.Cuotas.Where(c => c.Estado != CuotaEstado.Anulada).Sum(c => c.ImporteOriginal);
+            if (totalVigente != via.MontoActual)
+                throw new InvalidOperationException("El total vigente de las obligaciones no coincide con MontoActual; debe conciliarse antes de agregar un ajuste.");
+            var ultimoNumeroAuditado = await _db.RevisionesPlanesPagoDetalles
+                .Where(d => d.PlanPagoId == planPagoId).Select(d => (int?)d.NumeroCuota).MaxAsync() ?? 0;
+
             var cuota = BuildCuota(
-                plan.Cuotas.Any() ? plan.Cuotas.Max(c => c.NumeroCuota) + 1 : 1,
+                Math.Max(plan.Cuotas.Select(c => c.NumeroCuota).DefaultIfEmpty(0).Max(), ultimoNumeroAuditado) + 1,
                 request.TipoCuota,
                 request.FechaVencimiento,
                 request.ImporteOriginal);
@@ -799,6 +829,8 @@ namespace BudgetControl.Api.Services.Commercial
             plan.Cuotas.Add(cuota);
             plan.CantidadCuotas += 1;
             ValidatePlanDoesNotExceedVia(via);
+            if (plan.Cuotas.Where(c => c.Estado != CuotaEstado.Anulada).Sum(c => c.ImporteOriginal) != via.MontoActual)
+                throw new InvalidOperationException("El ajuste dejaría el total vigente inconsistente con MontoActual.");
 
             _db.AjustesAcuerdosComercialesVias.Add(new AjusteAcuerdoComercialVia
             {
@@ -812,7 +844,7 @@ namespace BudgetControl.Api.Services.Commercial
                 TipoAjuste = TipoAjusteVia.CambioMonto,
                 Motivo = request.Motivo,
                 FechaAjuste = DateTime.UtcNow,
-                UsuarioAjuste = _userContext.UserName
+                UsuarioAjuste = usuario
             });
 
             _db.AjustesCuotaComerciales.Add(new AjusteCuotaComercial
@@ -828,7 +860,7 @@ namespace BudgetControl.Api.Services.Commercial
                 FechaVencimientoNueva = cuota.FechaVencimiento,
                 Motivo = request.Motivo,
                 FechaAjuste = DateTime.UtcNow,
-                UsuarioAjuste = _userContext.UserName
+                UsuarioAjuste = usuario
             });
 
             await RecalculateAcuerdoMontoTotalAsync(via.AcuerdoComercial);

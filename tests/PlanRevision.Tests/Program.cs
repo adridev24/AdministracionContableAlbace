@@ -87,6 +87,7 @@ try
     Check(await Scalar($"SELECT count(*) FROM cuotas_comerciales_dependencias_historicas WHERE cuota_comercial_id={historicalId}") == 1, "upgrade backfills cancelled payment dependency");
     await RevisionTests.RunAsync(NewContext, connection, Check);
     await ConcurrencyTests.RunAsync(NewContext, connectionString, Check);
+    await RevisionOperationTests.RunAsync(NewContext, connectionString, Check);
 
     // DDL rollback proves no partially installed schema; data below are disposable fixtures only.
     await using (var tx = await db.Database.BeginTransactionAsync())
