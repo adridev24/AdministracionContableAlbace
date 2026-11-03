@@ -11,6 +11,8 @@ bin/
 obj/
 
 # publicar / despliegue
+/Backup/bakcup_vacia_maestros.sql
+/auxiliares/
 publish/
 store/
 

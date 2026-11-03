@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { cents } from '../revision/revisionDraft.js';
 
 const formatMoney = (value, monedaCodigo = 'ARS') =>
   `${monedaCodigo} ${Number(value || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
@@ -21,8 +22,9 @@ const AplicacionPagoForm = ({ cuotas, monedaCodigo = 'ARS', onChange, pagoTotal 
       item.cuotaComercialId === cuotaId ? { ...item, importeAplicado } : item
     );
 
-    const totalAplicado = updated.reduce((sum, item) => sum + item.importeAplicado, 0);
-    if (totalAplicado <= pagoTotal) {
+    const totalAplicado = updated.reduce((sum, item) => sum + (cents(item.importeAplicado) ?? 0n), 0n);
+    const saldo = cents(cuotas.find(c => c.id === cuotaId)?.saldoPendiente);
+    if (cents(value || '0') != null && cents(value || '0') <= saldo && totalAplicado <= (cents(pagoTotal) ?? 0n)) {
       setAplicaciones(updated);
       onChange(updated);
     }

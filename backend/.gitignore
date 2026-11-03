@@ -21,3 +21,8 @@ appsettings.Development.json
 
 # herramientas de .net core
 .dotnet/
+
+# para compilar en linux
+/efbundle
+/publish-linux/
+/migration-inicial.sql

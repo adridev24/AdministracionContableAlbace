@@ -1,0 +1,28 @@
+.revision-dialog { width: min(1000px, calc(100vw - 40px)); max-height: 90dvh; box-sizing: border-box; border: 1px solid var(--border); border-radius: 18px; padding: 24px; color: var(--text-primary); background: var(--bg-surface); overflow-y: auto; }
+.revision-dialog::backdrop { background: rgb(25 25 25 / 55%); }
+.revision-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.revision-header h2 { margin-top: 0; }
+.revision-dialog section { margin-top: 22px; }
+.revision-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.revision-metrics > div { padding: 12px; background: var(--bg-page); border-radius: 10px; }
+.revision-metrics dt { font-size: .85rem; color: var(--text-secondary); }
+.revision-metrics dd { margin: 6px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.revision-quota { border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin: 12px 0; }
+.revision-quota-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.revision-fields { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; }
+.revision-fields label { display: grid; gap: 6px; flex: 1 1 200px; min-width: 0; }
+.revision-dialog input:not([type=checkbox]), .revision-dialog textarea { box-sizing: border-box; width: 100%; min-height: 40px; border: 1px solid var(--border); border-radius: 6px; padding: 8px; font: inherit; }
+.revision-dialog input[inputmode=decimal] { text-align: right; font-variant-numeric: tabular-nums; }
+.revision-dialog input:disabled { background: #f0f0f0; color: #595959; }
+.revision-changed { border-left: 4px solid #a85612; }
+.revision-dialog .revision-field-changed { border: 2px solid #a85612; }
+.revision-removed { background: #fff1e7; border-style: dashed; }
+.revision-note { color: var(--text-secondary); font-size: .9rem; line-height: 1.5; }
+.revision-summary { border-top: 2px solid var(--border); padding-top: 12px; }
+.revision-comment { display: grid; gap: 8px; }
+.revision-comment textarea { min-height: 80px; resize: vertical; }
+.revision-confirm { display: flex; align-items: center; gap: 10px; margin: 18px 0; }
+.revision-dialog button:disabled { opacity: .55; cursor: not-allowed; }
+.revision-dialog button { white-space: normal; }
+.revision-dialog .alert-box button { display: block; margin-top: 10px; }
+@media (max-width: 650px) { .revision-dialog { width: calc(100vw - 16px); padding: 16px; max-height: 95dvh; } .revision-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .revision-header { flex-wrap: wrap; } }

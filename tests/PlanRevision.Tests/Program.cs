@@ -88,6 +88,7 @@ try
     await RevisionTests.RunAsync(NewContext, connection, Check);
     await ConcurrencyTests.RunAsync(NewContext, connectionString, Check);
     await RevisionOperationTests.RunAsync(NewContext, connectionString, Check);
+    await PagoPlanificadoTests.RunAsync(NewContext, Check);
 
     // DDL rollback proves no partially installed schema; data below are disposable fixtures only.
     await using (var tx = await db.Database.BeginTransactionAsync())

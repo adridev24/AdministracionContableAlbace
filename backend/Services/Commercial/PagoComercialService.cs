@@ -19,6 +19,7 @@ namespace BudgetControl.Api.Services.Commercial
 
         public async Task<PagoComercialResponse> RegistrarPagoAsync(CreatePagoComercialRequest request)
         {
+            await using var transaction = await _db.Database.BeginTransactionAsync();
             if (request.ImporteTotal <= 0)
             {
                 throw new InvalidOperationException("El importe del pago debe ser mayor a cero.");
@@ -94,7 +95,9 @@ namespace BudgetControl.Api.Services.Commercial
                     }
                 };
 
-            return MapPago(await AplicarPagoInternoAsync(pago, aplicaciones));
+            var result = MapPago(await AplicarPagoInternoAsync(pago, aplicaciones));
+            await transaction.CommitAsync();
+            return result;
         }
 
         public async Task<PagoComercialResponse> AplicarPagoAsync(int pagoId, AplicarPagoRequest request)
@@ -209,6 +212,12 @@ namespace BudgetControl.Api.Services.Commercial
             var totalYaAplicado = pago.Aplicaciones.Sum(x => x.ImporteAplicado);
             var totalSolicitado = aplicacionRequests.Sum(r => r.ImporteAplicado);
             var saldoPago = pago.ImporteTotal - totalYaAplicado;
+            var planificada = pago.AcuerdoComercialVia.ModalidadCobro == ModalidadCobro.Planificada;
+            if (planificada && (pago.TipoImputacion != TipoImputacion.Cuota ||
+                totalSolicitado != saldoPago || !aplicacionRequests.Any() ||
+                aplicacionRequests.Any(a => a.TipoImputacion != TipoImputacion.Cuota || !a.CuotaComercialId.HasValue ||
+                    a.HitoComercialViaId.HasValue || a.ImporteAplicado <= 0 || decimal.Round(a.ImporteAplicado, 2) != a.ImporteAplicado)))
+                throw new InvalidOperationException("En una vía planificada debe imputar todo el pago al anticipo y/o cuotas del plan, sin saldo sin aplicar.");
 
             if (totalSolicitado <= 0)
             {
@@ -264,6 +273,9 @@ namespace BudgetControl.Api.Services.Commercial
 
                     cuota = cuotas.Single(c => c.Id == request.CuotaComercialId.Value);
                     var via = cuota.PlanPago.AcuerdoComercialVia;
+                    if (planificada && (cuota.Estado == CuotaEstado.Anulada ||
+                        (cuota.TipoCuota != TipoCuota.Anticipo && cuota.TipoCuota != TipoCuota.Cuota)))
+                        throw new InvalidOperationException("Solo puede imputar a anticipos o cuotas vigentes del plan.");
 
                     if (via.Id != pago.AcuerdoComercialViaId)
                     {

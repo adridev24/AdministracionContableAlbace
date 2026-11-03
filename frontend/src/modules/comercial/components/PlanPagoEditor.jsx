@@ -238,7 +238,7 @@ const PlanPagoEditor = ({ planPago, viaMonto = 0, monedaCodigo = '', onSave, loa
       {(error || localError) && <p className="form-error">{localError || error}</p>}
 
       {readOnly ? (
-        <p className="empty-state">El plan base queda fijo al aprobar el acuerdo. Los cambios posteriores se cargan como cuotas adicionales o de ajuste.</p>
+        <p className="empty-state">El plan aprobado se muestra en modo lectura. Un Administrador puede revisarlo mediante la acción Revisar plan aprobado. Los adicionales y ajustes mantienen su circuito específico.</p>
       ) : (
         <div className="form-footer">
           <button className="btn-primary" type="button" onClick={handleSave} disabled={loading || !totalsMatch}>

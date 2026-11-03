@@ -5,6 +5,9 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import EstadoComercialResumen from '../components/EstadoComercialResumen';
 import PlanPagoForm from '../components/PlanPagoForm';
 import PlanPagoEditor from '../components/PlanPagoEditor';
+import RevisionPlanPanel from '../components/RevisionPlanPanel';
+import { canReviewPlan } from '../revision/revisionDraft.js';
+import { getUserRoles } from '../../../Services/authUtils.js';
 import CuotasComercialesTable from '../components/CuotasComercialesTable';
 import AjusteCuotaModal from '../components/AjusteCuotaModal';
 import AgregarCuotaModal from '../components/AgregarCuotaModal';
@@ -60,6 +63,8 @@ const AcuerdoDetallePage = () => {
   const [planLoading, setPlanLoading] = useState(false);
   const [planError, setPlanError] = useState('');
   const [success, setSuccess] = useState('');
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  const [revisionEstado, setRevisionEstado] = useState(null);
   const [ajustarModalOpen, setAjustarModalOpen] = useState(false);
   const [selectedCuota, setSelectedCuota] = useState(null);
   const [agregarModalOpen, setAgregarModalOpen] = useState(false);
@@ -87,9 +92,14 @@ const AcuerdoDetallePage = () => {
   } = usePagosComerciales();
 
   const vias = detalle?.vias ?? [];
-  const selectedVia = vias.find((via) => via.id === selectedViaId) ?? vias[0];
+  const baseVia = vias.find((via) => via.id === selectedViaId) ?? vias[0];
+  const selectedVia = useMemo(() => baseVia && revisionEstado?.acuerdoComercialViaId === baseVia.id
+    ? { ...baseVia, montoActual: revisionEstado.montoActual, totalPagado: revisionEstado.totalPagadoValido, saldoPendiente: revisionEstado.saldoPendiente, saldoAFavor: revisionEstado.saldoAFavor }
+    : baseVia, [baseVia, revisionEstado]);
+  const roles = getUserRoles();
+  const canRevisar = canReviewPlan(roles, detalle, selectedVia);
   const isBorrador = detalle?.estado === 'Borrador' && selectedVia?.estado === 'Borrador';
-  const canAgregarCuota = selectedVia?.planPago && ['Aprobado', 'EnCurso'].includes(selectedVia?.estado);
+  const canAgregarCuota = roles.includes('Admin') && selectedVia?.planPago && ['Aprobado', 'EnCurso'].includes(selectedVia?.estado);
   const viasPlanificadasSinPlan = vias.filter((via) => via.modalidadCobro === 'Planificada' && !via.planPago);
   const canCreatePlanForSelectedVia = selectedVia && !(selectedVia.viaOperacion === 'Via2' && selectedVia.modalidadCobro === 'Abierta');
 
@@ -133,9 +143,10 @@ const AcuerdoDetallePage = () => {
     };
   }, [selectedVia]);
 
-  const refreshDetalle = async () => {
+  const refreshDetalle = async (revisionState = null) => {
     const updatedDetalle = await acuerdosService.getAcuerdoDetalle(id);
     setDetalle(updatedDetalle);
+    setRevisionEstado(revisionState);
   };
 
   const handleCreatePlan = async (payload) => {
@@ -378,6 +389,7 @@ const AcuerdoDetallePage = () => {
               <div><strong>Monto actual</strong><p>{currency(selectedVia.montoActual, selectedVia.monedaCodigo)}</p></div>
               <div><strong>Total pagado</strong><p>{currency(selectedVia.totalPagado, selectedVia.monedaCodigo)}</p></div>
               <div><strong>Saldo pendiente</strong><p>{currency(selectedVia.saldoPendiente, selectedVia.monedaCodigo)}</p></div>
+              {selectedVia.saldoAFavor != null && <div><strong>Saldo a favor</strong><p>{currency(selectedVia.saldoAFavor, selectedVia.monedaCodigo)}</p></div>}
               <div><strong>Modalidad</strong><p>{selectedVia.modalidadCobro}</p></div>
               <div><strong>Estado</strong><p>{selectedVia.estado}</p></div>
               <div><strong>Observaciones</strong><p>{selectedVia.observaciones || '-'}</p></div>
@@ -432,11 +444,10 @@ const AcuerdoDetallePage = () => {
               description={isBorrador
                 ? `Antes de aprobar puede ajustar anticipo y cuotas hasta que el total coincida con el monto de la via.`
                 : `Plan base asociado a ${selectedVia.viaOperacion} - ${selectedVia.monedaCodigo}.`}
-              actions={canAgregarCuota && (
-                <button className="btn-primary" type="button" onClick={() => setAgregarModalOpen(true)}>
-                  Agregar cuota
-                </button>
-              )}
+              actions={<div className="page-actions">
+                {canRevisar && <button className="btn-primary" type="button" onClick={() => setRevisionOpen(true)}>Revisar plan aprobado</button>}
+                {canAgregarCuota && <button className="btn-secondary" type="button" onClick={() => setAgregarModalOpen(true)}>Agregar adicional o ajuste</button>}
+              </div>}
             >
               <PlanPagoEditor
                 planPago={selectedVia.planPago}
@@ -609,6 +620,13 @@ const AcuerdoDetallePage = () => {
         </>
       )}
 
+      {revisionOpen && canRevisar && <RevisionPlanPanel key={`${id}-${selectedVia.id}-${selectedVia.planPago.id}`}
+        acuerdoId={Number(id)} viaId={selectedVia.id} planId={selectedVia.planPago.id} onClose={() => setRevisionOpen(false)}
+        onSuccess={async (result, current) => {
+          setRevisionEstado(current);
+          setSuccess(`Revisión ${result.revision.id} confirmada. El plan continúa aprobado.`);
+          await refreshDetalle(current);
+        }} />}
       <AjusteCuotaModal
         open={ajustarModalOpen}
         cuota={selectedCuota}

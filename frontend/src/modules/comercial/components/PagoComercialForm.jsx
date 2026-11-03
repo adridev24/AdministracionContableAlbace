@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { cents, formatMoney } from '../revision/revisionDraft.js';
 import AplicacionPagoForm from './AplicacionPagoForm';
+import cobranzasService from '../../cobranzas/services/cobranzasService';
 
 const imputaciones = [
   { value: 'Anticipo', label: 'Anticipo' },
@@ -27,9 +29,30 @@ const PagoComercialForm = ({ acuerdo, onSubmit, loading, error, initialViaId = n
     observaciones: '',
     aplicaciones: []
   });
+  const [mediosPago, setMediosPago] = useState([]);
+  const [mediosLoading, setMediosLoading] = useState(true);
+  const [mediosError, setMediosError] = useState('');
+  const [mediosAttempt, setMediosAttempt] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setMediosLoading(true);
+    setMediosError('');
+    cobranzasService.getMediosPago(true)
+      .then((medios) => { if (active) setMediosPago(medios); })
+      .catch(() => { if (active) setMediosError('No se pudieron cargar los medios de pago.'); })
+      .finally(() => { if (active) setMediosLoading(false); });
+    return () => { active = false; };
+  }, [mediosAttempt]);
 
   const selectedVia = vias.find((via) => String(via.id) === String(form.acuerdoComercialViaId));
-  const cuotas = selectedVia?.planPago?.cuotas || [];
+  const planificada = selectedVia?.modalidadCobro === 'Planificada';
+  const tipoImputacion = planificada ? 'Cuota' : form.tipoImputacion;
+  const cuotas = useMemo(() => (selectedVia?.planPago?.cuotas || []).filter(c => !planificada ||
+    (['Anticipo', 'Cuota'].includes(c.tipoCuota) && c.estado !== 'Anulada' && Number(c.saldoPendiente) > 0)), [selectedVia?.planPago?.cuotas, planificada]);
+  const aplicado = form.aplicaciones.reduce((sum, item) => sum + (cents(item.importeAplicado) ?? 0n), 0n);
+  const imputacionCompleta = !planificada || (cents(form.importeTotal) > 0n && aplicado === cents(form.importeTotal) && form.aplicaciones.every(item =>
+    cents(item.importeAplicado) != null && cuotas.some(c => c.id === item.cuotaComercialId && cents(item.importeAplicado) <= cents(c.saldoPendiente))));
   const hitos = selectedVia?.hitos || [];
 
   useEffect(() => {
@@ -63,18 +86,19 @@ const PagoComercialForm = ({ acuerdo, onSubmit, loading, error, initialViaId = n
   const handleSubmit = (e) => {
     e.preventDefault();
     const importeTotal = Number(form.importeTotal);
-    if (importeTotal <= 0 || !selectedVia) return;
+    if (importeTotal <= 0 || !selectedVia || !imputacionCompleta || mediosLoading || mediosError || !mediosPago.some(medio => medio.descripcion === form.medioPago)) return;
 
-    const aplicaciones = form.tipoImputacion === 'Cuota'
+    const aplicaciones = tipoImputacion === 'Cuota'
       ? form.aplicaciones.filter((item) => item.importeAplicado > 0).map((item) => ({ ...item, tipoImputacion: 'Cuota' }))
-      : form.tipoImputacion === 'Hito'
+      : tipoImputacion === 'Hito'
         ? [{ hitoComercialViaId: Number(form.hitoComercialViaId), importeAplicado: importeTotal, tipoImputacion: 'Hito', observaciones: form.observaciones }]
         : [];
 
     onSubmit({
       ...form,
+      tipoImputacion,
       acuerdoComercialViaId: Number(form.acuerdoComercialViaId),
-      hitoComercialViaId: form.hitoComercialViaId ? Number(form.hitoComercialViaId) : null,
+      hitoComercialViaId: !planificada && form.hitoComercialViaId ? Number(form.hitoComercialViaId) : null,
       importeTotal,
       fechaPago: new Date(form.fechaPago).toISOString(),
       aplicaciones
@@ -105,8 +129,8 @@ const PagoComercialForm = ({ acuerdo, onSubmit, loading, error, initialViaId = n
       </div>
       <div className="form-field">
         <label>Tipo de imputacion</label>
-        <select name="tipoImputacion" value={form.tipoImputacion} onChange={handleChange}>
-          {imputaciones.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        <select name="tipoImputacion" value={tipoImputacion} onChange={handleChange} disabled={planificada}>
+          {(planificada ? [{ value: 'Cuota', label: 'Anticipo y/o cuotas del plan' }] : imputaciones).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
         </select>
       </div>
       <div className="form-field">
@@ -118,10 +142,15 @@ const PagoComercialForm = ({ acuerdo, onSubmit, loading, error, initialViaId = n
         <input type="number" min="0.01" step="0.01" name="importeTotal" value={form.importeTotal} onChange={handleChange} required />
       </div>
       <div className="form-field">
-        <label>Medio de pago</label>
-        <input name="medioPago" value={form.medioPago} onChange={handleChange} required />
+        <label htmlFor="pago-comercial-medio">Medio de pago</label>
+        <select id="pago-comercial-medio" name="medioPago" value={form.medioPago} onChange={handleChange} required disabled={loading || mediosLoading || !!mediosError}>
+          <option value="">{mediosLoading ? 'Cargando medios de pago...' : 'Seleccioná un medio de pago'}</option>
+          {mediosPago.map((medio) => <option key={medio.id} value={medio.descripcion}>{medio.descripcion}</option>)}
+        </select>
+        {mediosError && <div role="alert"><p className="form-error">{mediosError}</p><button type="button" className="btn-secondary" onClick={() => setMediosAttempt(attempt => attempt + 1)}>Reintentar carga de medios</button></div>}
+        {!mediosLoading && !mediosError && !mediosPago.length && <p role="status">No hay medios de pago activos disponibles.</p>}
       </div>
-      {form.tipoImputacion === 'Hito' && (
+      {tipoImputacion === 'Hito' && (
         <div className="form-field">
           <label>Hito</label>
           <select name="hitoComercialViaId" value={form.hitoComercialViaId} onChange={handleChange} required>
@@ -135,11 +164,12 @@ const PagoComercialForm = ({ acuerdo, onSubmit, loading, error, initialViaId = n
         <textarea name="observaciones" value={form.observaciones} onChange={handleChange} rows="3" />
       </div>
 
-      {form.tipoImputacion === 'Cuota' && (
+      {tipoImputacion === 'Cuota' && (
         <div className="full-width payment-applications">
-          <h3>Aplicacion a cuotas</h3>
+          <h3>Aplicación al anticipo y/o cuotas</h3>
           {selectedVia?.planPago ? (
             <AplicacionPagoForm
+              key={`${acuerdo?.id}-${selectedVia.id}`}
               cuotas={cuotas}
               monedaCodigo={selectedVia.monedaCodigo}
               onChange={(aplicaciones) => setForm({ ...form, aplicaciones })}
@@ -148,12 +178,13 @@ const PagoComercialForm = ({ acuerdo, onSubmit, loading, error, initialViaId = n
           ) : (
             <p className="empty-state">La via seleccionada no tiene plan de pago.</p>
           )}
+          {planificada && <p role="status">Aplicado: {formatMoney(aplicado, form.monedaCodigo)}. Debe distribuir todo el importe del pago entre el anticipo y/o cuotas pendientes. Puede pagar parcialmente una obligación, pero no dejar parte del pago sin imputar.</p>}
         </div>
       )}
 
       {error && <p className="form-error full-width">{error}</p>}
       <div className="form-footer full-width">
-        <button className="btn-primary" type="submit" disabled={loading || !selectedVia || (form.tipoImputacion === 'Cuota' && !selectedVia?.planPago)}>
+        <button className="btn-primary" type="submit" disabled={loading || !imputacionCompleta || mediosLoading || !!mediosError || !mediosPago.some(medio => medio.descripcion === form.medioPago) || !selectedVia || (tipoImputacion === 'Cuota' && !selectedVia?.planPago)}>
           {loading ? 'Guardando pago...' : 'Registrar pago comercial'}
         </button>
       </div>
