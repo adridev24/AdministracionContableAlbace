@@ -7,9 +7,14 @@ import configuracionesContablesService from '../services/configuracionesContable
 import '../contabilidad.css';
 
 const emptyDetalle = () => ({ tipoMovimiento: 'Debe', concepto: '', cuentaContableId: '', esObligatorio: true, orden: 1 });
+const esRubroOpcional = (form, detalle) => form.codigoOperacion.trim().toUpperCase() === 'FACTURA_VENTA'
+  && ['DEVOLUCION_CHEQUES', 'VENTA_NO_GRAVADA', 'VENTA_EXENTA', 'PERCEPCION_IIBB'].includes(detalle.concepto.trim().toUpperCase());
 const conceptoDescriptions = {
   CLIENTES: 'Deudores por ventas / Total del cliente',
   VENTA_NETA: 'Neto de la venta',
+  VENTA_NO_GRAVADA: 'Otros importes no gravados',
+  VENTA_EXENTA: 'Ventas exentas',
+  DEVOLUCION_CHEQUES: 'Devolución de cheques',
   IVA_DEBITO: 'IVA Debito Fiscal',
   PERCEPCION_IIBB: 'Percepcion de Ingresos Brutos',
   CAJA: 'Caja',
@@ -17,6 +22,8 @@ const conceptoDescriptions = {
   CHEQUES_TERCEROS: 'Valores a depositar',
   RETENCION_GANANCIAS_SUFRIDA: 'Retencion de Ganancias sufrida',
   RETENCION_IIBB_SUFRIDA: 'Retencion de IIBB sufrida',
+  RETENCION_SUSS_SUFRIDA: 'Retención SUSS sufrida',
+  RETENCION_IVA_SUFRIDA: 'Retención IVA sufrida',
   RETENCIONES: 'Retenciones',
 };
 
@@ -417,6 +424,13 @@ const ConfiguracionContablePage = () => {
                 )}
               </div>
 
+              {selectedTipoOperacion?.codigo === 'FACTURA_VENTA' && (
+                <p>Asigná CLIENTES al Debe por el total. En el Haber podés separar otros no gravados,
+                  exentos y devoluciones de cheques. Si omitís alguna de esas cuentas, su importe se suma
+                  a VENTA_NETA. IVA_DEBITO reúne el IVA de las alícuotas y PERCEPCION_IIBB registra la
+                  percepción aplicada. Marcá como opcionales los conceptos que puedan tener importe cero.</p>
+              )}
+
               <div className="table-wrapper">
                 <table className="data-table asiento-edit-table">
                   <thead>
@@ -459,11 +473,11 @@ const ConfiguracionContablePage = () => {
                           <label className="checkbox-inline">
                             <input
                               type="checkbox"
-                              checked={detalle.esObligatorio}
+                              checked={detalle.esObligatorio && !esRubroOpcional(form, detalle)}
                               onChange={(event) => handleDetalleChange(index, 'esObligatorio', event.target.checked)}
-                              disabled={readOnly}
+                              disabled={readOnly || esRubroOpcional(form, detalle)}
                             />
-                            {detalle.esObligatorio ? 'Si' : 'No'}
+                            {detalle.esObligatorio && !esRubroOpcional(form, detalle) ? 'Si' : 'No'}
                           </label>
                         </td>
                         <td>

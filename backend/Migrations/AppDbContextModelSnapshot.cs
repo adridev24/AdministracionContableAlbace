@@ -1163,6 +1163,34 @@ namespace BudgetControl.Api.Migrations
                             RequiereFechaValor = false,
                             RequiereReferencia = true,
                             UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Activo = true,
+                            Codigo = "RETENCION_SUSS",
+                            CodigoConceptoContable = "RETENCION_SUSS_SUFRIDA",
+                            Descripcion = "Retención SUSS sufrida",
+                            FechaAlta = new DateTime(2026, 8, 17, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Orden = 60,
+                            RequiereBanco = false,
+                            RequiereFechaValor = false,
+                            RequiereReferencia = true,
+                            UsuarioAlta = "Sistema"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Activo = true,
+                            Codigo = "RETENCION_IVA",
+                            CodigoConceptoContable = "RETENCION_IVA_SUFRIDA",
+                            Descripcion = "Retención IVA sufrida",
+                            FechaAlta = new DateTime(2026, 8, 17, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Orden = 70,
+                            RequiereBanco = false,
+                            RequiereFechaValor = false,
+                            RequiereReferencia = true,
+                            UsuarioAlta = "Sistema"
                         });
                 });
 
@@ -2011,7 +2039,7 @@ namespace BudgetControl.Api.Migrations
 
                             t.HasCheckConstraint("ck_revision_detalle_tipo", "tipo_cuota IN (0, 1, 2, 3, 4) AND operacion IN (1, 2, 3, 4)");
 
-                            t.HasCheckConstraint("ck_revision_detalle_valores", "\n                    (operacion = 2 AND cuota_comercial_id IS NOT NULL AND importe_anterior IS NULL AND vencimiento_anterior IS NULL AND estado_anterior IS NULL AND importe_pagado_anterior IS NULL AND saldo_pendiente_anterior IS NULL AND importe_nuevo IS NOT NULL AND vencimiento_nuevo IS NOT NULL AND estado_nuevo IS NOT NULL)\n                    OR (operacion = 3 AND cuota_comercial_id IS NULL AND importe_anterior IS NOT NULL AND vencimiento_anterior IS NOT NULL AND estado_anterior IS NOT NULL AND importe_pagado_anterior IS NOT NULL AND importe_pagado_anterior = 0 AND saldo_pendiente_anterior IS NOT NULL AND importe_nuevo IS NULL AND vencimiento_nuevo IS NULL AND estado_nuevo IS NULL)\n                    OR (operacion IN (1, 4) AND cuota_comercial_id IS NOT NULL AND importe_anterior IS NOT NULL AND vencimiento_anterior IS NOT NULL AND estado_anterior IS NOT NULL AND importe_pagado_anterior IS NOT NULL AND saldo_pendiente_anterior IS NOT NULL AND importe_nuevo IS NOT NULL AND vencimiento_nuevo IS NOT NULL AND estado_nuevo IS NOT NULL AND (operacion <> 4 OR estado_nuevo = 4))");
+                            t.HasCheckConstraint("ck_revision_detalle_valores", "\r\n                    (operacion = 2 AND cuota_comercial_id IS NOT NULL AND importe_anterior IS NULL AND vencimiento_anterior IS NULL AND estado_anterior IS NULL AND importe_pagado_anterior IS NULL AND saldo_pendiente_anterior IS NULL AND importe_nuevo IS NOT NULL AND vencimiento_nuevo IS NOT NULL AND estado_nuevo IS NOT NULL)\r\n                    OR (operacion = 3 AND cuota_comercial_id IS NULL AND importe_anterior IS NOT NULL AND vencimiento_anterior IS NOT NULL AND estado_anterior IS NOT NULL AND importe_pagado_anterior IS NOT NULL AND importe_pagado_anterior = 0 AND saldo_pendiente_anterior IS NOT NULL AND importe_nuevo IS NULL AND vencimiento_nuevo IS NULL AND estado_nuevo IS NULL)\r\n                    OR (operacion IN (1, 4) AND cuota_comercial_id IS NOT NULL AND importe_anterior IS NOT NULL AND vencimiento_anterior IS NOT NULL AND estado_anterior IS NOT NULL AND importe_pagado_anterior IS NOT NULL AND saldo_pendiente_anterior IS NOT NULL AND importe_nuevo IS NOT NULL AND vencimiento_nuevo IS NOT NULL AND estado_nuevo IS NOT NULL AND (operacion <> 4 OR estado_nuevo = 4))");
                         });
                 });
 
@@ -3221,6 +3249,9 @@ namespace BudgetControl.Api.Migrations
                     b.Property<DateTime?>("FechaUltimoCalculoPercepcion")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("fecha_ultimo_calculo_percepcion");
+
+                    b.Property<string>("FiscalSimpleJson")
+                        .HasColumnType("text");
 
                     b.Property<string>("MonedaCodigo")
                         .IsRequired()

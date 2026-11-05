@@ -12,6 +12,7 @@ const buildQuery = (filters = {}) => {
 };
 
 const cuentaCorrienteClientesService = {
+  exportarExcel: (clienteId, filters) => apiClient.get(`/api/cuenta-corriente-clientes/${clienteId}/excel${buildQuery(filters)}`, { responseType: 'blob' }).then(res => res.data),
   getCuentaCorriente: (clienteId, filters = {}) =>
     apiClient.get(`/api/cuenta-corriente-clientes/${clienteId}${buildQuery(filters)}`).then((res) => res.data),
 };

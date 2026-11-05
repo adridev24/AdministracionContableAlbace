@@ -1,3 +1,4 @@
+import NumericInput from '../../../shared/components/NumericInput';
 import { useEffect, useMemo, useState } from 'react';
 
 const emptyForm = {
@@ -154,15 +155,15 @@ const VentaDetalleForm = ({ venta, itemsFacturables, alicuotas, nomencladores, s
         </div>
         <div className="form-field">
           <label>Cantidad</label>
-          <input name="cantidad" type="number" min="0.0001" step="0.0001" value={form.cantidad} onChange={handleChange} required />
+          <NumericInput name="cantidad"  min="0.0001" step="0.0001" value={form.cantidad} onChange={handleChange} required />
         </div>
         <div className="form-field">
           <label>Precio unitario</label>
-          <input name="precioUnitario" type="number" min="0" step="0.0001" value={form.precioUnitario} onChange={handleChange} required />
+          <NumericInput name="precioUnitario"  min="0" step="0.0001" value={form.precioUnitario} onChange={handleChange} required />
         </div>
         <div className="form-field">
           <label>Descuento %</label>
-          <input name="porcentajeDescuento" type="number" min="0" max="100" step="0.0001" value={form.porcentajeDescuento} onChange={handleChange} />
+          <NumericInput name="porcentajeDescuento"  min="0" max="100" step="0.0001" value={form.porcentajeDescuento} onChange={handleChange} />
         </div>
         <div className="form-field">
           <label>Tratamiento IVA</label>

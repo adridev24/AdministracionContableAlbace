@@ -22,7 +22,6 @@ const VentasTable = ({ ventas, onEdit }) => {
             <th>Cliente</th>
             <th>Obra</th>
             <th>Moneda</th>
-            <th>Estado</th>
             <th>Alta</th>
             <th>Acciones</th>
           </tr>
@@ -34,13 +33,12 @@ const VentasTable = ({ ventas, onEdit }) => {
               <td>
                 <strong>{venta.tipoComprobanteDescripcion}</strong>
                 <span className="table-subtext">
-                  {formatNumber(venta.puntoVenta, 4)}-{formatNumber(venta.numeroComprobante, 8)}
+                  {formatNumber(venta.puntoVenta, 5)}-{formatNumber(venta.numeroComprobante, 8)}
                 </span>
               </td>
               <td>{venta.clienteNombre || venta.clienteExternoId}</td>
               <td>{venta.obraNombre || venta.obraExternaId}</td>
               <td>{venta.monedaCodigo}</td>
-              <td><span className="status-pill is-draft">{venta.estado}</span></td>
               <td>
                 <span>{formatDate(venta.fechaAlta)}</span>
                 <span className="table-subtext">{venta.usuarioAlta}</span>

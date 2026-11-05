@@ -482,6 +482,7 @@ namespace BudgetControl.Api.Services.Commercial
                         Fecha = venta.FechaComprobante,
                         Estado = venta.Estado.ToString(),
                         TotalFactura = RoundMoney(venta.Total),
+                        MonedaFactura = venta.MonedaCodigo,
                         ImporteAplicadoObligacion = RoundMoney(item.Vinculacion.ImporteVinculado)
                     };
                 })
@@ -1397,15 +1398,7 @@ namespace BudgetControl.Api.Services.Commercial
             var ids = obligacionIds.Distinct().ToList();
             if (!ids.Any()) return new Dictionary<int, decimal>();
 
-            var cobranzas = await _db.CobranzasAplicacionesObligacion
-                .AsNoTracking()
-                .Where(a => ids.Contains(a.CuotaComercialId) &&
-                    a.AplicacionFactura.Cobranza.Estado == CobranzaEstado.Confirmada)
-                .GroupBy(a => a.CuotaComercialId)
-                .Select(g => new { CuotaId = g.Key, Importe = g.Sum(x => x.ImporteAplicado) })
-                .ToListAsync();
-
-            return cobranzas.ToDictionary(g => g.CuotaId, g => RoundMoney(g.Importe));
+            return await BudgetControl.Api.Services.Collections.SaldosCuotasCobranza.ObtenerAsync(_db, ids);
         }
 
         private async Task<Dictionary<int, decimal>> BuildCobradoVia1PorViaAsync(IEnumerable<int> acuerdoViaIds, DateTime? desde = null, DateTime? hasta = null)
@@ -1413,28 +1406,14 @@ namespace BudgetControl.Api.Services.Commercial
             var ids = acuerdoViaIds.Distinct().ToList();
             if (!ids.Any()) return new Dictionary<int, decimal>();
 
-            var query = _db.CobranzasAplicacionesObligacion
-                .AsNoTracking()
-                .Where(a => ids.Contains(a.CuotaComercial.PlanPago.AcuerdoComercialViaId) &&
-                    a.CuotaComercial.PlanPago.AcuerdoComercialVia.ViaOperacion == ViaOperacion.Via1 &&
-                    a.AplicacionFactura.Cobranza.Estado == CobranzaEstado.Confirmada);
-
-            if (desde.HasValue)
-            {
-                query = query.Where(a => a.AplicacionFactura.Cobranza.Fecha >= desde.Value);
-            }
-
-            if (hasta.HasValue)
-            {
-                query = query.Where(a => a.AplicacionFactura.Cobranza.Fecha <= hasta.Value);
-            }
-
-            var cobranzas = await query
-                .GroupBy(a => a.CuotaComercial.PlanPago.AcuerdoComercialViaId)
-                .Select(g => new { AcuerdoViaId = g.Key, Importe = g.Sum(x => x.ImporteAplicado) })
-                .ToListAsync();
-
-            return cobranzas.ToDictionary(g => g.AcuerdoViaId, g => RoundMoney(g.Importe));
+            var cuotas = await _db.CuotasComerciales.AsNoTracking()
+                .Where(c => ids.Contains(c.PlanPago.AcuerdoComercialViaId) &&
+                    c.PlanPago.AcuerdoComercialVia.ViaOperacion == ViaOperacion.Via1)
+                .Select(c => new { c.Id, c.PlanPago.AcuerdoComercialViaId }).ToListAsync();
+            var cobranzas = await BudgetControl.Api.Services.Collections.SaldosCuotasCobranza.ObtenerAsync(
+                _db, cuotas.Select(c => c.Id), desde: desde, hasta: hasta);
+            return cuotas.GroupBy(c => c.AcuerdoComercialViaId)
+                .ToDictionary(g => g.Key, g => g.Sum(c => cobranzas.GetValueOrDefault(c.Id)));
         }
 
         private static decimal GetTotalCobradoReporteVia(AcuerdoComercialVia via, IReadOnlyDictionary<int, decimal> cobradoVia1PorVia)
@@ -1479,7 +1458,7 @@ namespace BudgetControl.Api.Services.Commercial
         private static string BuildComprobante(Venta venta)
         {
             var tipo = venta.TipoComprobante?.Codigo ?? "Factura";
-            return $"{tipo} {venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}";
+            return $"{tipo} {venta.PuntoVenta:00000}-{venta.NumeroComprobante:00000000}";
         }
 
         private static string? BuildMediosPago(Cobranza cobranza)

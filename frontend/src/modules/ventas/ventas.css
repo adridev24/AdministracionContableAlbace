@@ -422,3 +422,36 @@
     grid-column: 2;
   }
 }
+.factura-importes {
+  min-width: 0;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid #d9dfe6;
+  border-radius: .65rem;
+  display: grid;
+  gap: .9rem;
+}
+.factura-importes legend { padding: 0 .4rem; font-weight: 600; }
+.factura-importes .form-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 11rem),1fr)); gap: .8rem; align-items: end; }
+.factura-importes label, .factura-iva { display: grid; gap: .35rem; }
+.factura-importes input, .factura-importes select { min-width: 0; width: 100%; box-sizing: border-box; }
+.factura-importes input, .factura-iva strong, .factura-subtotal strong { text-align: right; font-variant-numeric: tabular-nums; }
+.factura-iva strong { padding: .5rem .65rem; background: #f3f5f7; border-radius: .35rem; }
+.factura-importes > button { justify-self: start; }
+.factura-subtotal { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .3rem 1rem; border-top: 1px solid #d9dfe6; padding-top: .85rem; }
+.factura-subtotal small { width: 100%; color: #505e6b; }
+
+/* Consistent text fields for fiscal amounts and collection applications. */
+.ventas-page .numeric-input, .factura-importes input, .factura-importes select, .cobranzas-page .inline-entry input {
+  padding: 11px 12px;
+  border: 1px solid #dfe5ee;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text-dark);
+  box-sizing: border-box;
+}
+.ventas-page .numeric-input:focus, .factura-importes input:focus, .factura-importes select:focus, .cobranzas-page .inline-entry input:focus {
+  outline: none;
+  border-color: rgba(236, 102, 36, .5);
+  box-shadow: 0 0 0 4px rgba(236, 102, 36, .08);
+}

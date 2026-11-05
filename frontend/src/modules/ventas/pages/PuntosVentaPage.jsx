@@ -13,7 +13,7 @@ const emptyForm = {
   comprobantesPermitidosIds: [],
 };
 
-const formatPunto = (value) => String(value || 0).padStart(4, '0');
+const formatPunto = (value) => String(value || 0).padStart(5, '0');
 const getErrorMessage = (error) => error?.response?.data?.error || 'No se pudo completar la operacion.';
 
 const PuntosVentaPage = () => {
@@ -181,7 +181,7 @@ const PuntosVentaPage = () => {
           <div className="form-grid">
             <div className="form-field">
               <label>Numero</label>
-              <input name="numero" type="number" min="1" value={form.numero} onChange={handleChange} required />
+              <input name="numero" type="number" min="1" max="99999" value={form.numero} onChange={handleChange} required />
             </div>
             <div className="form-field">
               <label>Descripcion</label>

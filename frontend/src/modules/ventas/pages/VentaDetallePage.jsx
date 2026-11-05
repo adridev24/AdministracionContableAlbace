@@ -5,7 +5,7 @@ import SectionCard from '../../../shared/components/SectionCard';
 import VentaDetalleForm from '../components/VentaDetalleForm';
 import VentaDetalleTable from '../components/VentaDetalleTable';
 import VentaAplicacionesPlanVia1 from '../components/VentaAplicacionesPlanVia1';
-import VentaPercepcionIibbPanel from '../components/VentaPercepcionIibbPanel';
+import AlicuotaIibbSelect from '../components/AlicuotaIibbSelect';
 import VentaTotalsPanel from '../components/VentaTotalsPanel';
 import ventasService from '../services/ventasService';
 import '../ventas.css';
@@ -22,8 +22,7 @@ const VentaDetallePage = () => {
   const [nomencladores, setNomencladores] = useState([]);
   const [itemsFacturables, setItemsFacturables] = useState([]);
   const [regimenesIibb, setRegimenesIibb] = useState([]);
-  const [clientePercepcionConfig, setClientePercepcionConfig] = useState(null);
-  const [percepcionIibb, setPercepcionIibb] = useState(null);
+  const [regimenId, setRegimenId] = useState('');
   const [selectedDetalle, setSelectedDetalle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,64 +33,42 @@ const VentaDetallePage = () => {
   const [error, setError] = useState('');
   const isConfirmed = venta?.estado === 'Confirmada';
 
-  const loadData = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const ventaData = await ventasService.getVenta(ventaId);
-      const [alicuotasData, nomencladoresData, itemsData, regimenesData, configData, percepcionData] = await Promise.all([
-        ventasService.getAlicuotasIva({ soloActivos: true }),
-        ventasService.getNomencladores({ soloActivos: true }),
-        ventasService.getItemsFacturables({ soloActivos: true }),
-        ventasService.getPercepcionesIibb({ soloActivos: true, soloVigentes: true }),
-        ventasService.getClientePercepcionIibbConfig(ventaData.clienteExternoId),
-        ventasService.getVentaPercepcionIibb(ventaId),
-      ]);
-      setVenta(ventaData);
-      setAlicuotas(alicuotasData || []);
-      setNomencladores(nomencladoresData || []);
-      setItemsFacturables(itemsData || []);
-      setRegimenesIibb(regimenesData || []);
-      setClientePercepcionConfig(configData);
-      setPercepcionIibb(percepcionData);
-    } catch (loadError) {
-      setError(getErrorMessage(loadError));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const [revision, setRevision] = useState(0);
+  const loadData = () => setRevision(n => n + 1);
+  const percepcion = venta?.percepcionesIibb?.find(p => p.activa);
   useEffect(() => {
     let mounted = true;
-    ventasService.getVenta(ventaId)
-      .then((ventaData) => Promise.all([
-        Promise.resolve(ventaData),
-        ventasService.getAlicuotasIva({ soloActivos: true }),
-        ventasService.getNomencladores({ soloActivos: true }),
-        ventasService.getItemsFacturables({ soloActivos: true }),
-        ventasService.getPercepcionesIibb({ soloActivos: true, soloVigentes: true }),
-        ventasService.getClientePercepcionIibbConfig(ventaData.clienteExternoId),
-        ventasService.getVentaPercepcionIibb(ventaId),
-      ]))
-      .then(([ventaData, alicuotasData, nomencladoresData, itemsData, regimenesData, configData, percepcionData]) => {
-        if (!mounted) return;
-        setVenta(ventaData);
-        setAlicuotas(alicuotasData || []);
-        setNomencladores(nomencladoresData || []);
-        setItemsFacturables(itemsData || []);
-        setRegimenesIibb(regimenesData || []);
-        setClientePercepcionConfig(configData);
-        setPercepcionIibb(percepcionData);
-      })
-      .catch((loadError) => {
-        if (mounted) setError(getErrorMessage(loadError));
-      })
-      .finally(() => {
+    async function cargar() {
+      setLoading(true);
+      setError('');
+      try {
+        const factura = await ventasService.getVenta(ventaId);
+        if (factura.estado === 'Borrador') {
+          const [tasas, nomencladores, items, regimenes] = await Promise.all([
+            ventasService.getAlicuotasIva({ soloActivos: true }),
+            ventasService.getNomencladores({ soloActivos: true }),
+            ventasService.getItemsFacturables({ soloActivos: true }),
+            ventasService.getPercepcionesIibb({ soloActivos: true }),
+          ]);
+          if (!mounted) return;
+          setAlicuotas(tasas);
+          setNomencladores(nomencladores);
+          setItemsFacturables(items);
+          setRegimenesIibb(regimenes);
+        }
+        if (mounted) {
+          setVenta(factura);
+          setRegimenId(String(factura.percepcionesIibb?.find(p => p.activa)?.regimenPercepcionIibbId || ''));
+        }
+      } catch (err) {
+        if (mounted) { setError(getErrorMessage(err)); setVenta(null); }
+      } finally {
         if (mounted) setLoading(false);
-      });
-
+      }
+    }
+    cargar();
     return () => { mounted = false; };
-  }, [ventaId]);
+  }, [ventaId, revision]);
 
   const handleSubmitDetalle = async (payload) => {
     setSaving(true);
@@ -103,7 +80,6 @@ const VentaDetallePage = () => {
         : await ventasService.createVentaDetalle(ventaId, payload);
 
       setVenta(response.venta);
-      setPercepcionIibb(response.venta?.percepcionesIibb?.[0] || percepcionIibb);
       setSelectedDetalle(null);
       setMessage(selectedDetalle?.id ? 'Detalle actualizado.' : 'Detalle agregado.');
     } catch (saveError) {
@@ -121,26 +97,10 @@ const VentaDetallePage = () => {
     try {
       const updatedVenta = await ventasService.deleteVentaDetalle(ventaId, detalle.id);
       setVenta(updatedVenta);
-      setPercepcionIibb(updatedVenta?.percepcionesIibb?.[0] || percepcionIibb);
       setSelectedDetalle(null);
       setMessage('Detalle eliminado.');
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSavePercepcionConfig = async (payload) => {
-    setSaving(true);
-    setMessage('');
-    setError('');
-    try {
-      const config = await ventasService.saveClientePercepcionIibbConfig(venta.clienteExternoId, payload);
-      setClientePercepcionConfig(config);
-      setMessage('Configuracion tributaria del cliente guardada.');
-    } catch (configError) {
-      setError(getErrorMessage(configError));
     } finally {
       setSaving(false);
     }
@@ -151,9 +111,7 @@ const VentaDetallePage = () => {
     setMessage('');
     setError('');
     try {
-      const result = await ventasService.calcularVentaPercepcionIibb(ventaId);
-      setPercepcionIibb(result.percepcion);
-      setClientePercepcionConfig(result.configuracionCliente);
+      const result = await ventasService.calcularVentaPercepcionIibb(ventaId, regimenId);
       if (result.venta) setVenta(result.venta);
       setMessage('Percepcion de IIBB Entre Rios calculada.');
     } catch (calcError) {
@@ -189,7 +147,7 @@ const VentaDetallePage = () => {
 
     const resumen = [
       `Comprobante: ${venta.tipoComprobanteDescripcion}`,
-      `Numero: ${formatNumber(venta.puntoVenta, 4)}-${formatNumber(venta.numeroComprobante, 8)}`,
+      `Numero: ${formatNumber(venta.puntoVenta, 5)}-${formatNumber(venta.numeroComprobante, 8)}`,
       `Cliente: ${venta.clienteNombre || venta.clienteExternoId}`,
       `Obra: ${venta.obraNombre || venta.obraExternaId}`,
       `Total final: ${formatMoney(venta.total)}`,
@@ -206,7 +164,6 @@ const VentaDetallePage = () => {
     try {
       const result = await ventasService.confirmarFactura(ventaId);
       setVenta(result.venta);
-      setPercepcionIibb(result.venta?.percepcionesIibb?.[0] || percepcionIibb);
       setSelectedDetalle(null);
       setConfirmacionValidacion(null);
       setMessage(`Factura confirmada. Asiento contable: ${result.asientoContableId}.`);
@@ -229,8 +186,8 @@ const VentaDetallePage = () => {
     <div className="page-container ventas-page">
       <div className="page-header">
         <div>
-          <h1>Factura Borrador</h1>
-          <p className="page-subtitle">Carga de detalles y totales calculados en backend.</p>
+          <h1>Detalle de factura</h1>
+          <p className="page-subtitle">Comprobante, composición fiscal y total registrado.</p>
         </div>
         <div className="page-actions">
           <Link className="btn-secondary" to="/ventas">Ventas</Link>
@@ -256,7 +213,7 @@ const VentaDetallePage = () => {
               </div>
               <div>
                 <span>Numero</span>
-                <strong>{formatNumber(venta.puntoVenta, 4)}-{formatNumber(venta.numeroComprobante, 8)}</strong>
+                <strong>{formatNumber(venta.puntoVenta, 5)}-{formatNumber(venta.numeroComprobante, 8)}</strong>
               </div>
               <div>
                 <span>Fecha</span>
@@ -318,7 +275,7 @@ const VentaDetallePage = () => {
             <SectionCard title="Confirmacion definitiva">
               <div className="summary-grid">
                 <div><span>Comprobante</span><strong>{venta.tipoComprobanteDescripcion}</strong></div>
-                <div><span>Punto de venta</span><strong>{formatNumber(venta.puntoVenta, 4)}</strong></div>
+                <div><span>Punto de venta</span><strong>{formatNumber(venta.puntoVenta, 5)}</strong></div>
                 <div><span>Numero</span><strong>{formatNumber(venta.numeroComprobante, 8)}</strong></div>
                 <div><span>Neto</span><strong>{formatMoney((venta.totalAntesPercepciones || 0) - (venta.totalIva || 0))}</strong></div>
                 <div><span>IVA</span><strong>{formatMoney(venta.totalIva)}</strong></div>
@@ -342,7 +299,11 @@ const VentaDetallePage = () => {
             onSaved={loadData}
           />
 
-          <SectionCard title="Detalles">
+          {venta.fiscalSimple ? <SectionCard title="Importes registrados">
+            {venta.fiscalSimple.cotizacionDolarReferencia != null && <p>Dólar de referencia al facturar: ARS {venta.fiscalSimple.cotizacionDolarReferencia.toLocaleString('es-AR',{maximumFractionDigits:6})} por USD.</p>}
+            {venta.fiscalSimple.lineas.map(l => <p key={l.alicuotaId}>Neto {l.neto.toFixed(2)} · IVA {l.porcentaje}%: {l.iva.toFixed(2)}</p>)}
+            <p>Otros no gravados: {venta.fiscalSimple.noGravado.toFixed(2)} · Exento: {venta.fiscalSimple.exento.toFixed(2)} · Devolución de cheques: {venta.fiscalSimple.devolucionCheques.toFixed(2)}</p>
+          </SectionCard> : <SectionCard title="Detalles">
             <VentaDetalleTable
               detalles={venta.detalles || []}
               saving={saving || confirming}
@@ -350,21 +311,24 @@ const VentaDetallePage = () => {
               onEdit={setSelectedDetalle}
               onDelete={handleDeleteDetalle}
             />
-          </SectionCard>
+          </SectionCard>}
 
-          <SectionCard title="Tributos adicionales">
-            <VentaPercepcionIibbPanel
-              venta={venta}
-              percepcion={percepcionIibb}
-              clienteConfig={clientePercepcionConfig}
-              regimenes={regimenesIibb}
-              saving={saving || confirming}
-              calculating={calculatingPercepcion}
-              readOnly={isConfirmed}
-              onSaveConfig={handleSavePercepcionConfig}
-              onCalcular={handleCalcularPercepcion}
-            />
-          </SectionCard>
+          {venta.estado === 'Borrador' && <SectionCard title="Percepción IIBB">
+            <AlicuotaIibbSelect regimenes={regimenesIibb} fecha={venta.fechaComprobante.slice(0, 10)}
+              value={regimenId} onChange={setRegimenId} disabled={venta.tipoComprobanteEsExportacion} />
+            <button type="button" className="btn-secondary" disabled={saving || confirming || calculatingPercepcion}
+              onClick={handleCalcularPercepcion}>Aplicar alícuota</button>
+          </SectionCard>}
+          {percepcion && (percepcion.importe > 0 || percepcion.regimenPercepcionIibbId) && (
+            <SectionCard title="Percepción IIBB registrada"><div className="summary-grid">
+              <div><span>Régimen</span><strong>{percepcion.descripcionRegimenAplicada || '—'}</strong></div>
+              {percepcion.esAutomatica && <>
+                <div><span>Base imponible</span><strong>{formatMoney(percepcion.baseImponible)}</strong></div>
+                <div><span>Alícuota</span><strong>{percepcion.alicuotaAplicada}%</strong></div>
+              </>}
+              <div><span>Importe</span><strong>{formatMoney(percepcion.importe)}</strong></div>
+            </div></SectionCard>
+          )}
 
           <SectionCard title="Totales">
             <VentaTotalsPanel venta={venta} />

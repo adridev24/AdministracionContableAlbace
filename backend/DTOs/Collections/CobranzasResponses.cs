@@ -98,6 +98,7 @@ namespace BudgetControl.Api.DTOs.Collections
 
     public class CobranzaAplicacionObligacionResponse
     {
+        public string MonedaCodigo { get; set; } = string.Empty;
         public int Id { get; set; }
         public int CobranzaAplicacionFacturaId { get; set; }
         public int CuotaComercialId { get; set; }

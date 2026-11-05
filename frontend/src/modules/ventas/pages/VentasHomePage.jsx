@@ -16,7 +16,7 @@ const initialFilters = {
   tipoComprobanteVentaId: '',
   puntoVenta: '',
   numeroComprobante: '',
-  estado: 'Borrador',
+  estado: '',
   page: 1,
   pageSize: 50,
 };
@@ -32,6 +32,7 @@ const VentasHomePage = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selectedVenta, setSelectedVenta] = useState(null);
+  const [registro,setRegistro] = useState(null);
 
   const loadVentas = async (nextFilters = filters) => {
     setLoading(true);
@@ -101,7 +102,7 @@ const VentasHomePage = () => {
       if (selectedVenta?.id) {
         await ventasService.updateVenta(selectedVenta.id, payload);
       } else {
-        await ventasService.createVenta(payload);
+        setRegistro(await ventasService.createVenta(payload));
       }
       setSelectedVenta(null);
       await loadVentas(filters);
@@ -117,7 +118,7 @@ const VentasHomePage = () => {
       <div className="page-header">
         <div>
           <h1>Ventas</h1>
-          <p className="page-subtitle">Encabezados de comprobantes en estado Borrador.</p>
+          <p className="page-subtitle">Registro de facturas por cliente y obra.</p>
         </div>
         <div className="page-actions">
           <Link className="btn-secondary" to="/ventas/parametrizacion">Parametrizacion</Link>
@@ -148,15 +149,17 @@ const VentasHomePage = () => {
             <strong>Cuenta corriente</strong>
             <span>Saldos, movimientos y facturas por cliente y moneda.</span>
           </Link>
+          <Link className="module-menu-item" to="/ventas/libro-iva"><strong>Libro IVA Ventas</strong><span>Consultar comprobantes e importes por período.</span></Link>
         </div>
       </SectionCard>
 
       <SectionCard
-        title={selectedVenta ? 'Editar borrador' : 'Nueva venta en borrador'}
-        description="Solo se registra el encabezado. Los detalles, totales e impacto contable quedan para etapas posteriores."
+        title={selectedVenta ? 'Editar borrador' : 'Nueva factura'}
+        description="Al registrar se genera el asiento y la deuda del cliente."
       >
+        {registro && <p role="status">Factura registrada. Total: {registro.monedaCodigo} {registro.total}. Percepción IIBB: {registro.totalPercepciones}.</p>}
         <VentaHeaderForm
-          key={selectedVenta?.id || 'new'}
+          key={selectedVenta?.id || 'new-' + (registro?.id || 0)}
           tiposComprobante={tiposComprobante}
           selectedVenta={selectedVenta}
           saving={saving}
@@ -227,6 +230,7 @@ const VentasHomePage = () => {
         {loading ? <LoadingSpinner /> : <VentasTable ventas={ventas} onEdit={setSelectedVenta} />}
         {error && <p className="form-error">{error}</p>}
       </SectionCard>
+
     </div>
   );
 };

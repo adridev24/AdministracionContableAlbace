@@ -101,15 +101,16 @@ namespace BudgetControl.Api.Services.Sales
             return percepcion == null ? null : MapPercepcion(percepcion);
         }
 
-        public async Task<VentaPercepcionIibbCalculoResponse> CalcularAsync(int ventaId)
+        public async Task<VentaPercepcionIibbCalculoResponse> CalcularAsync(int ventaId, int? regimenFacturaId = null)
         {
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await using var transaction = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync() : null;
             var venta = await GetVentaForPercepcionAsync(ventaId);
             if (venta.Estado != VentaEstado.Borrador) throw new InvalidOperationException("Solo una venta en estado Borrador permite recalcular percepciones.");
 
-            var config = await GetClienteConfigQuery().FirstOrDefaultAsync(c => c.ClienteExternoId == venta.ClienteExternoId);
             _calculador.RecalcularTotales(venta);
-            var result = await DeterminarAsync(venta, config);
+            var result = await DeterminarAsync(venta, regimenFacturaId);
+            if (regimenFacturaId.HasValue && (result.Regimen == null || result.Resultado is ResultadoPercepcionIibb.RegimenVencido or ResultadoPercepcionIibb.BaseNoSoportada))
+                throw new InvalidOperationException(result.Motivo);
             var percepcion = await UpsertPercepcionAsync(venta, result);
 
             venta.PercepcionIibbRequiereRecalculo = false;
@@ -119,52 +120,27 @@ namespace BudgetControl.Api.Services.Sales
             _calculador.RecalcularTotales(venta);
 
             await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+            if (transaction != null) await transaction.CommitAsync();
 
             return new VentaPercepcionIibbCalculoResponse
             {
-                Percepcion = MapPercepcion(percepcion),
-                ConfiguracionCliente = config == null ? null : MapClienteConfig(config)
+                Percepcion = MapPercepcion(percepcion)
             };
         }
 
-        private async Task<PercepcionDetermination> DeterminarAsync(Venta venta, ClientePercepcionIibbConfig? config)
+        private async Task<PercepcionDetermination> DeterminarAsync(Venta venta, int? regimenId)
         {
             if (venta.TipoComprobante.EsExportacion)
             {
                 return PercepcionDetermination.NoAplica(ResultadoPercepcionIibb.Exportacion, "El comprobante de exportacion no aplica percepcion de IIBB Entre Rios.");
             }
 
-            if (config == null || config.Situacion == SituacionPercepcionIibbCliente.Pendiente)
+            if (!regimenId.HasValue)
             {
-                return PercepcionDetermination.NoAplica(ResultadoPercepcionIibb.ClienteSinConfigurar, "El cliente no tiene configurada su situacion frente a percepcion de IIBB Entre Rios.");
+                return PercepcionDetermination.NoAplica(ResultadoPercepcionIibb.SinRegimen, "Factura sin percepción de IIBB.");
             }
 
-            if (config.Situacion == SituacionPercepcionIibbCliente.NoAlcanzado)
-            {
-                return PercepcionDetermination.NoAplica(ResultadoPercepcionIibb.NoCorresponde, "El cliente esta configurado como no alcanzado por percepcion de IIBB Entre Rios.");
-            }
-
-            if (config.Situacion == SituacionPercepcionIibbCliente.Excluido)
-            {
-                if (!config.ExclusionDesde.HasValue || !config.ExclusionHasta.HasValue)
-                {
-                    return PercepcionDetermination.NoAplica(ResultadoPercepcionIibb.ClienteSinConfigurar, "La exclusion del cliente no tiene vigencia completa configurada.");
-                }
-
-                var fecha = venta.FechaComprobante.Date;
-                if (config.ExclusionDesde.Value.Date <= fecha && fecha <= config.ExclusionHasta.Value.Date)
-                {
-                    return PercepcionDetermination.NoAplica(ResultadoPercepcionIibb.Excluido, "El cliente posee exclusion vigente de percepcion de IIBB Entre Rios.");
-                }
-            }
-
-            if (!config.RegimenPercepcionIibbId.HasValue)
-            {
-                return PercepcionDetermination.NoAplica(ResultadoPercepcionIibb.SinRegimen, "El cliente no tiene regimen de percepcion asignado.");
-            }
-
-            var regimen = await _db.PercepcionesIibbEntreRios.FirstOrDefaultAsync(r => r.Id == config.RegimenPercepcionIibbId.Value);
+            var regimen = await _db.PercepcionesIibbEntreRios.FirstOrDefaultAsync(r => r.Id == regimenId.Value);
             if (regimen == null || !regimen.Activo)
             {
                 return PercepcionDetermination.NoAplica(ResultadoPercepcionIibb.SinRegimen, "El regimen de percepcion asignado no existe o se encuentra inactivo.");
@@ -214,8 +190,8 @@ namespace BudgetControl.Api.Services.Sales
                     FechaAlta = DateTime.UtcNow,
                     UsuarioAlta = _userContext.UserName
                 };
+                // EF adds the dependent to the tracked invoice collection through its FK.
                 _db.VentasPercepcionesIibb.Add(percepcion);
-                venta.PercepcionesIibb.Add(percepcion);
             }
             else
             {

@@ -252,13 +252,13 @@ namespace BudgetControl.Api.Services.Collections
                 {
                     CobranzaMedioPagoId = medio.Id,
                     BancoCobranzaId = medio.BancoCobranzaId!.Value,
-                    NumeroCheque = medio.NumeroReferencia!.Trim(),
+                    NumeroCheque = medio.NumeroReferencia?.Trim() ?? string.Empty,
                     FechaEmision = NormalizeRequiredDate(medio.FechaEmision!.Value, "La fecha de emision del cheque es obligatoria."),
                     FechaVencimiento = NormalizeRequiredDate(medio.FechaValor!.Value, "La fecha de vencimiento del cheque es obligatoria."),
                     Importe = RoundMoney(medio.Importe),
                     MonedaCodigo = NormalizeCurrency(cobranza.MonedaCodigo),
-                    Librador = medio.Librador!.Trim(),
-                    CuitLibrador = medio.CuitLibrador!.Trim(),
+                    Librador = medio.Librador?.Trim() ?? string.Empty,
+                    CuitLibrador = medio.CuitLibrador?.Trim() ?? string.Empty,
                     Estado = ChequeTerceroEstado.EN_CARTERA,
                     Observaciones = medio.Observaciones,
                     FechaAlta = DateTime.UtcNow,
@@ -287,12 +287,9 @@ namespace BudgetControl.Api.Services.Collections
         private static void ValidateMedioChequeParaCartera(CobranzaMedioPago medio)
         {
             if (!medio.BancoCobranzaId.HasValue) throw new InvalidOperationException("El cheque requiere banco.");
-            if (string.IsNullOrWhiteSpace(medio.NumeroReferencia)) throw new InvalidOperationException("El cheque requiere numero.");
             if (!medio.FechaEmision.HasValue) throw new InvalidOperationException("El cheque requiere fecha de emision.");
             if (!medio.FechaValor.HasValue) throw new InvalidOperationException("El cheque requiere fecha de vencimiento.");
             if (medio.Importe <= 0) throw new InvalidOperationException("El importe del cheque debe ser mayor a cero.");
-            if (string.IsNullOrWhiteSpace(medio.Librador)) throw new InvalidOperationException("El cheque requiere librador.");
-            if (string.IsNullOrWhiteSpace(medio.CuitLibrador)) throw new InvalidOperationException("El cheque requiere CUIT del librador.");
         }
 
         private static ChequeTerceroListResponse MapList(ChequeTercero cheque)
@@ -579,70 +576,19 @@ namespace BudgetControl.Api.Services.Collections
 
             if (!cuotaIds.Any()) return;
 
-            var importesConfirmados = await _db.CobranzasAplicacionesObligacion
-                .AsNoTracking()
-                .Where(o => cuotaIds.Contains(o.CuotaComercialId) &&
-                    o.AplicacionFactura.Cobranza.Estado == CobranzaEstado.Confirmada)
-                .GroupBy(o => o.CuotaComercialId)
-                .Select(g => new { CuotaId = g.Key, Importe = g.Sum(o => o.ImporteAplicado) })
-                .ToDictionaryAsync(g => g.CuotaId, g => g.Importe);
-
-            var importesRechazados = await BuildImportesRechazadosPorCuotaAsync(cuotaIds);
+            var importesConfirmados = await SaldosCuotasCobranza.ObtenerAsync(_db, cuotaIds);
             var cuotas = await _db.CuotasComerciales.Where(c => cuotaIds.Contains(c.Id)).ToListAsync();
 
             foreach (var cuota in cuotas)
             {
                 importesConfirmados.TryGetValue(cuota.Id, out var confirmado);
-                importesRechazados.TryGetValue(cuota.Id, out var rechazado);
-                cuota.ImportePagado = Math.Max(RoundMoney(confirmado - rechazado), 0);
+
+                cuota.ImportePagado = Math.Max(RoundMoney(confirmado), 0);
                 cuota.SaldoPendiente = Math.Max(RoundMoney(cuota.ImporteOriginal - cuota.ImportePagado), 0);
                 UpdateCuotaEstado(cuota);
             }
 
             await _db.SaveChangesAsync();
-        }
-
-        private async Task<Dictionary<int, decimal>> BuildImportesRechazadosPorCuotaAsync(IEnumerable<int> cuotaIds)
-        {
-            var cuotaIdList = cuotaIds.Distinct().ToList();
-            var distribucionesRechazadas = await _db.CobranzasMediosPagoAplicacionesFactura
-                .AsNoTracking()
-                .Include(d => d.CobranzaMedioPago)
-                    .ThenInclude(m => m.ChequeTercero)
-                .Include(d => d.AplicacionFactura)
-                    .ThenInclude(a => a.AplicacionesObligacion)
-                .Where(d => d.CobranzaMedioPago.ChequeTercero != null &&
-                    d.CobranzaMedioPago.ChequeTercero.Estado == ChequeTerceroEstado.RECHAZADO &&
-                    d.AplicacionFactura.AplicacionesObligacion.Any(o => cuotaIdList.Contains(o.CuotaComercialId)))
-                .ToListAsync();
-
-            var cuotaIdSet = cuotaIdList.ToHashSet();
-            var result = new Dictionary<int, decimal>();
-            foreach (var distribucion in distribucionesRechazadas)
-            {
-                foreach (var item in DistribuirImporteEnObligaciones(distribucion.ImporteAplicado, distribucion.AplicacionFactura.AplicacionesObligacion))
-                {
-                    if (!cuotaIdSet.Contains(item.CuotaComercialId)) continue;
-                    result[item.CuotaComercialId] = RoundMoney(result.GetValueOrDefault(item.CuotaComercialId) + item.Importe);
-                }
-            }
-
-            return result;
-        }
-
-        private static IEnumerable<ImportePorCuota> DistribuirImporteEnObligaciones(
-            decimal importeFacturaRechazado,
-            IEnumerable<CobranzaAplicacionObligacion> obligaciones)
-        {
-            var restante = RoundMoney(importeFacturaRechazado);
-            foreach (var obligacion in obligaciones.OrderBy(o => o.Id))
-            {
-                if (restante <= 0) yield break;
-                var importe = RoundMoney(Math.Min(restante, obligacion.ImporteAplicado));
-                if (importe <= 0) continue;
-                yield return new ImportePorCuota(obligacion.CuotaComercialId, importe);
-                restante = RoundMoney(restante - importe);
-            }
         }
 
         private static SolicitudContabilizacionAutomaticaRequest BuildSolicitudContableRechazo(
@@ -708,7 +654,7 @@ namespace BudgetControl.Api.Services.Collections
 
         private static string BuildComprobante(Venta venta)
         {
-            return $"{venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}";
+            return $"{venta.PuntoVenta:00000}-{venta.NumeroComprobante:00000000}";
         }
 
         private static DateTime NormalizeRequiredDate(DateTime value, string errorMessage)
@@ -741,6 +687,5 @@ namespace BudgetControl.Api.Services.Collections
             return Math.Round(value, 2, MidpointRounding.AwayFromZero);
         }
 
-        private sealed record ImportePorCuota(int CuotaComercialId, decimal Importe);
     }
 }

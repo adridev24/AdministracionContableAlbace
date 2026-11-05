@@ -83,7 +83,7 @@ const SituacionVia1DetalleModal = ({ acuerdoId, obligacion, monedaCodigo, onClos
                           <td>{factura.comprobante}</td>
                           <td>{formatDate(factura.fecha)}</td>
                           <td>{factura.estado}</td>
-                          <td>{currency(factura.totalFactura, monedaCodigo)}</td>
+                          <td>{currency(factura.totalFactura, factura.monedaFactura || monedaCodigo)}</td>
                           <td>{currency(factura.importeAplicadoObligacion, monedaCodigo)}</td>
                         </tr>
                       ))}

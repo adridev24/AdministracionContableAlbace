@@ -9,6 +9,7 @@ namespace BudgetControl.Api.Services.Collections
         Task<CobranzaListResponse> GetCobranzasAsync(CobranzaListFilterRequest filter);
         Task<CobranzaResponse?> GetCobranzaAsync(int id);
         Task<CobranzaResponse> CreateCobranzaAsync(CobranzaHeaderRequest request);
+        Task EliminarBorradorAsync(int id);
         Task<CobranzaResponse> UpdateCobranzaAsync(int id, CobranzaHeaderRequest request);
         Task<IEnumerable<FacturaPendienteCobranzaResponse>> GetFacturasDisponiblesAsync(int cobranzaId);
         Task<IEnumerable<CobranzaAplicacionFacturaResponse>> GetAplicacionesFacturaAsync(int cobranzaId);

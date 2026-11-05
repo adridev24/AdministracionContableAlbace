@@ -17,6 +17,22 @@ namespace BudgetControl.Api.Controllers.Sales
             _service = service;
         }
 
+        [HttpGet("{clienteId}/excel")]
+        public async Task<IActionResult> ExportarExcel(string clienteId, [FromQuery] CuentaCorrienteClienteFilterRequest filter)
+        {
+            try
+            {
+                var cuenta = await _service.GetCuentaCorrienteAsync(clienteId, filter);
+                return File(CuentaCorrienteExcel.Crear(cuenta, filter),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "cuenta-corriente.xlsx");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpGet("{clienteId}")]
         public async Task<IActionResult> GetCuentaCorriente(string clienteId, [FromQuery] CuentaCorrienteClienteFilterRequest filter)
         {

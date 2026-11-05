@@ -1,3 +1,5 @@
+import { todayArgentina } from '../../../shared/utils/calendarDate';
+import NumericInput from '../../../shared/components/NumericInput';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -6,29 +8,29 @@ import externalDataService from '../../comercial/services/externalDataService';
 import cobranzasService from '../services/cobranzasService';
 import '../../ventas/ventas.css';
 
-const today = new Date().toISOString().slice(0, 10);
 
-const initialForm = {
+
+const initialForm = () => ({
   clienteExternoId: '',
-  fecha: today,
+  fecha: todayArgentina(),
   monedaCodigo: 'ARS',
   cotizacion: 1,
   importeTotal: '',
   observaciones: '',
-};
+});
 
-const initialMedio = {
+const initialMedio = () => ({
   medioPagoCobranzaId: '',
   importe: '',
   bancoCobranzaId: '',
   banco: '',
   numeroReferencia: '',
-  fechaEmision: today,
-  fechaValor: today,
+  fechaEmision: todayArgentina(),
+  fechaValor: todayArgentina(),
   librador: '',
   cuitLibrador: '',
   observaciones: '',
-};
+});
 
 const initialAnulacion = {
   motivo: '',
@@ -91,15 +93,21 @@ const CobranzasPage = () => {
     return () => { mounted = false; };
   }, []);
 
+  const mediosCompletos = Boolean(selectedCobranza?.mediosPago?.length) &&
+    roundMoney(selectedCobranza.importeTotal - selectedCobranza.totalMedios) === 0;
+
   useEffect(() => {
-    if (!selectedCobranza?.id || selectedCobranza.estado !== 'Borrador') {
+    let mounted = true;
+    setFacturasDisponibles([]);
+    if (!mediosCompletos || !selectedCobranza?.id || selectedCobranza.estado !== 'Borrador') {
       return;
     }
 
     cobranzasService.getFacturasDisponibles(selectedCobranza.id)
-      .then((data) => setFacturasDisponibles(data || []))
-      .catch((loadError) => setError(getErrorMessage(loadError)));
-  }, [selectedCobranza?.id, selectedCobranza?.estado]);
+      .then((data) => { if (mounted) setFacturasDisponibles(data || []); })
+      .catch((loadError) => { if (mounted) setError(getErrorMessage(loadError)); });
+    return () => { mounted = false; };
+  }, [selectedCobranza?.id, selectedCobranza?.estado, mediosCompletos]);
 
   const diferenciaMedios = useMemo(() => roundMoney(Number(selectedCobranza?.importeTotal || 0) - Number(selectedCobranza?.totalMedios || 0)), [selectedCobranza]);
   const diferenciaAplicaciones = useMemo(() => roundMoney(Number(selectedCobranza?.importeTotal || 0) - Number(selectedCobranza?.totalAplicado || 0)), [selectedCobranza]);
@@ -127,6 +135,8 @@ const CobranzasPage = () => {
       };
       const created = await cobranzasService.createCobranza(payload);
       setSelectedCobranza(created);
+      setMedioForm(initialMedio);
+      setAplicacionesDraft({});
       setForm(initialForm);
       await loadCobranzas();
       setSuccess('Cobranza en borrador creada.');
@@ -138,10 +148,19 @@ const CobranzasPage = () => {
   };
 
   const handleSelect = async (id) => {
+    setSaving(true);
     setError('');
     setSuccess('');
-    const data = await loadCobranzaDetalle(id);
-    setSelectedCobranza(data);
+    try {
+      const data = await loadCobranzaDetalle(id);
+      setSelectedCobranza(data);
+      setMedioForm(initialMedio);
+      setAplicacionesDraft({});
+    } catch (loadError) {
+      setError(getErrorMessage(loadError));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAddMedio = async (event) => {
@@ -187,15 +206,31 @@ const CobranzasPage = () => {
 
   const handleDeleteMedio = async (medioId) => {
     if (!selectedCobranza) return;
-    const updated = await cobranzasService.deleteMedio(selectedCobranza.id, medioId);
-    setSelectedCobranza(updated);
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await cobranzasService.deleteMedio(selectedCobranza.id, medioId);
+      setSelectedCobranza(updated);
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeleteAplicacion = async (aplicacionId) => {
     if (!selectedCobranza) return;
-    const updated = await cobranzasService.deleteAplicacion(selectedCobranza.id, aplicacionId);
-    setSelectedCobranza(await loadCobranzaDetalle(updated.id));
-    setFacturasDisponibles(await cobranzasService.getFacturasDisponibles(selectedCobranza.id));
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await cobranzasService.deleteAplicacion(selectedCobranza.id, aplicacionId);
+      setSelectedCobranza(await loadCobranzaDetalle(updated.id));
+      setFacturasDisponibles(await cobranzasService.getFacturasDisponibles(selectedCobranza.id));
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleApplyFullBalance = (factura) => {
@@ -217,6 +252,28 @@ const CobranzasPage = () => {
       }
     });
     setAplicacionesDraft(nextDraft);
+  };
+
+  const handleEliminarBorrador = async (cobranza) => {
+    if (!window.confirm('¿Eliminar el borrador de cobranza ' + cobranza.id + '? Se quitarán sus medios de pago y aplicaciones a facturas.')) return;
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      await cobranzasService.eliminarBorrador(cobranza.id);
+      if (selectedCobranza?.id === cobranza.id) {
+        setSelectedCobranza(null);
+        setFacturasDisponibles([]);
+        setMedioForm(initialMedio);
+        setAplicacionesDraft({});
+      }
+      await loadCobranzas();
+      setSuccess('Borrador eliminado.');
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleConfirmar = async () => {
@@ -321,11 +378,11 @@ const CobranzasPage = () => {
             </div>
             <div className="form-field">
               <label>Cotizacion</label>
-              <input name="cotizacion" type="number" min="0.000001" step="0.000001" value={form.cotizacion} onChange={handleFormChange} required />
+              <NumericInput name="cotizacion"  min="0.000001" step="0.000001" value={form.cotizacion} onChange={handleFormChange} required />
             </div>
             <div className="form-field">
               <label>Importe total</label>
-              <input name="importeTotal" type="number" min="0.01" step="0.01" value={form.importeTotal} onChange={handleFormChange} required />
+              <NumericInput name="importeTotal"  min="0.01" step="0.01" value={form.importeTotal} onChange={handleFormChange} required />
             </div>
             <div className="form-field">
               <label>Observaciones</label>
@@ -338,49 +395,12 @@ const CobranzasPage = () => {
         </form>
       </SectionCard>
 
-      <SectionCard title="Cobranzas registradas">
-        {loading ? <LoadingSpinner /> : (
-          <div className="responsive-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Cliente</th>
-                  <th>Importe</th>
-                  <th>Moneda</th>
-                  <th>Estado</th>
-                  <th>Facturas</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cobranzas.map((cobranza) => (
-                  <tr key={cobranza.id}>
-                    <td>{String(cobranza.fecha).slice(0, 10)}</td>
-                    <td>{cobranza.clienteNombre || cobranza.clienteExternoId}</td>
-                    <td>{money(cobranza.importeTotal)}</td>
-                    <td>{cobranza.monedaCodigo}</td>
-                    <td><span className={`status-pill ${cobranza.estado === 'Borrador' ? 'is-draft' : cobranza.estado === 'Anulada' ? 'is-inactive' : 'is-active'}`}>{cobranza.estado}</span></td>
-                    <td>{cobranza.cantidadFacturasAplicadas}</td>
-                    <td><button className="btn-secondary" type="button" onClick={() => handleSelect(cobranza.id)}>Abrir</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </SectionCard>
-
       {selectedCobranza && (
         <SectionCard
-          title={`Cobranza ${selectedCobranza.id}`}
+          title={`Medios de pago · Cobranza ${selectedCobranza.id}`}
           actions={(
             <>
-              {canEdit && (
-                <button className="btn-primary" type="button" onClick={handleConfirmar} disabled={saving || Boolean(confirmDisabledReason)} title={confirmDisabledReason}>
-                  Confirmar
-                </button>
-              )}
+              {canEdit && <button className="btn-secondary" type="button" onClick={() => handleEliminarBorrador(selectedCobranza)} disabled={saving}>Eliminar borrador</button>}
               {canAnular && (
                 <button className="btn-secondary" type="button" onClick={openAnulacionModal} disabled={saving}>
                   Anular
@@ -399,7 +419,7 @@ const CobranzasPage = () => {
             {selectedCobranza.fechaAnulacion && <div><span>Fecha anulacion</span><strong>{String(selectedCobranza.fechaAnulacion).slice(0, 10)}</strong></div>}
             {selectedCobranza.usuarioAnulacion && <div><span>Usuario anulacion</span><strong>{selectedCobranza.usuarioAnulacion}</strong></div>}
           </div>
-          {confirmDisabledReason && <p className="form-warning">{confirmDisabledReason}</p>}
+          {canEdit && !mediosCompletos && <p className="field-help">Agregá uno o varios medios hasta completar el total para aplicar la cobranza a las facturas.</p>}
           {selectedCobranza.motivoAnulacion && <p className="form-warning">{selectedCobranza.motivoAnulacion}</p>}
 
           {canEdit && (
@@ -416,7 +436,7 @@ const CobranzasPage = () => {
                 </div>
                 <div className="form-field">
                   <label>Importe</label>
-                  <input name="importe" type="number" min="0.01" step="0.01" value={medioForm.importe} onChange={handleMedioChange} required />
+                  <NumericInput name="importe"  min="0.01" step="0.01" value={medioForm.importe} onChange={handleMedioChange} required />
                 </div>
                 {selectedMedio?.requiereBanco && (
                   <div className="form-field">
@@ -429,10 +449,10 @@ const CobranzasPage = () => {
                     </select>
                   </div>
                 )}
-                {selectedMedio?.requiereReferencia && (
+                {selectedMedio && (
                   <div className="form-field">
-                    <label>{selectedMedioIsCheque ? 'Numero de cheque' : 'Referencia'}</label>
-                    <input name="numeroReferencia" value={medioForm.numeroReferencia} onChange={handleMedioChange} required />
+                    <label>{selectedMedioIsCheque ? 'Número de cheque (opcional)'  : 'Referencia (opcional)'}</label>
+                    <input name="numeroReferencia" value={medioForm.numeroReferencia} onChange={handleMedioChange}  />
                   </div>
                 )}
                 {selectedMedioIsCheque && (
@@ -450,12 +470,12 @@ const CobranzasPage = () => {
                 {selectedMedioIsCheque && (
                   <>
                     <div className="form-field">
-                      <label>Librador</label>
-                      <input name="librador" value={medioForm.librador} onChange={handleMedioChange} required />
+                      <label>Librador (opcional)</label>
+                      <input name="librador" value={medioForm.librador} onChange={handleMedioChange} />
                     </div>
                     <div className="form-field">
-                      <label>CUIT librador</label>
-                      <input name="cuitLibrador" value={medioForm.cuitLibrador} onChange={handleMedioChange} required />
+                      <label>CUIT librador (opcional)</label>
+                      <input name="cuitLibrador" value={medioForm.cuitLibrador} onChange={handleMedioChange} />
                     </div>
                   </>
                 )}
@@ -490,7 +510,7 @@ const CobranzasPage = () => {
                     <td>{[medio.banco, medio.numeroReferencia].filter(Boolean).join(' / ') || '-'}</td>
                     <td>{medio.medioPagoCodigo === 'CHEQUE' ? [medio.librador, medio.cuitLibrador, medio.fechaValor && String(medio.fechaValor).slice(0, 10)].filter(Boolean).join(' / ') : '-'}</td>
                     <td>{medio.codigoConceptoContable}</td>
-                    <td>{canEdit && <button className="btn-secondary" type="button" onClick={() => handleDeleteMedio(medio.id)}>Quitar</button>}</td>
+                    <td>{canEdit && <button className="btn-secondary" type="button" onClick={() => handleDeleteMedio(medio.id)} disabled={saving}>Quitar</button>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -499,7 +519,7 @@ const CobranzasPage = () => {
         </SectionCard>
       )}
 
-      {selectedCobranza && canEdit && (
+      {selectedCobranza && canEdit && mediosCompletos && (
         <SectionCard
           title="Facturas pendientes"
           actions={<button className="btn-secondary" type="button" onClick={handleAutoPropose} disabled={saving || facturasDisponibles.length === 0}>Aplicar automaticamente</button>}
@@ -537,8 +557,8 @@ const CobranzasPage = () => {
                     <td>{money(factura.saldoDisponible)}</td>
                     <td>
                       <div className="inline-entry">
-                        <input
-                          type="number"
+                        <NumericInput
+                          
                           min="0.01"
                           max={factura.saldoDisponible}
                           step="0.01"
@@ -557,8 +577,12 @@ const CobranzasPage = () => {
         </SectionCard>
       )}
 
-      {selectedCobranza && (
-        <SectionCard title="Aplicaciones a facturas">
+      {selectedCobranza && (!canEdit || mediosCompletos) && (
+        <SectionCard title="Aplicaciones a facturas"
+          actions={canEdit && <button className="btn-primary" type="button" onClick={handleConfirmar}
+            disabled={saving || Boolean(confirmDisabledReason)} title={confirmDisabledReason}>Confirmar cobranza</button>}
+        >
+          {confirmDisabledReason && <p className="form-warning">{confirmDisabledReason}</p>}
           <div className="summary-grid">
             <div><span>Importe cobranza</span><strong>{money(selectedCobranza.importeTotal)}</strong></div>
             <div><span>Total aplicado</span><strong>{money(selectedCobranza.totalAplicado)}</strong></div>
@@ -585,11 +609,11 @@ const CobranzasPage = () => {
                       )}
                       {aplicacion.aplicacionesObligacion.map((obligacion) => (
                         <span className="table-subtext" key={obligacion.id || `${obligacion.cuotaComercialId}-${obligacion.importeAplicado}`}>
-                          {obligacion.tipoObligacion} {obligacion.numeroCuota}: {money(obligacion.importeAplicado)}
+                          {obligacion.tipoObligacion} {obligacion.numeroCuota}: {obligacion.monedaCodigo} {money(obligacion.importeAplicado)}
                         </span>
                       ))}
                     </td>
-                    <td>{canEdit && <button className="btn-secondary" type="button" onClick={() => handleDeleteAplicacion(aplicacion.id)}>Quitar</button>}</td>
+                    <td>{canEdit && <button className="btn-secondary" type="button" onClick={() => handleDeleteAplicacion(aplicacion.id)} disabled={saving}>Quitar</button>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -600,6 +624,42 @@ const CobranzasPage = () => {
 
       {error && <p className="form-error">{error}</p>}
       {success && <p className="info-banner">{success}</p>}
+
+      <SectionCard title="Cobranzas registradas">
+        {loading ? <LoadingSpinner /> : (
+          <div className="responsive-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Importe</th>
+                  <th>Moneda</th>
+                  <th>Estado</th>
+                  <th>Facturas</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cobranzas.map((cobranza) => (
+                  <tr key={cobranza.id}>
+                    <td>{String(cobranza.fecha).slice(0, 10)}</td>
+                    <td>{cobranza.clienteNombre || cobranza.clienteExternoId}</td>
+                    <td>{money(cobranza.importeTotal)}</td>
+                    <td>{cobranza.monedaCodigo}</td>
+                    <td><span className={`status-pill ${cobranza.estado === 'Borrador' ? 'is-draft' : cobranza.estado === 'Anulada' ? 'is-inactive' : 'is-active'}`}>{cobranza.estado}</span></td>
+                    <td>{cobranza.cantidadFacturasAplicadas}</td>
+                    <td><div className="row-actions">
+                      <button className="btn-secondary" type="button" onClick={() => handleSelect(cobranza.id)} disabled={saving}>Abrir</button>
+                      {cobranza.estado === 'Borrador' && <button className="btn-secondary" type="button" onClick={() => handleEliminarBorrador(cobranza)} disabled={saving}>Eliminar borrador</button>}
+                    </div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
 
       {showAnulacionModal && (
         <div className="modal-backdrop">

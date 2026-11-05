@@ -66,8 +66,8 @@ const ventasService = {
         if (error?.response?.status === 404) return null;
         throw error;
       }),
-  calcularVentaPercepcionIibb: (ventaId) =>
-    apiClient.post(`/api/ventas/${ventaId}/percepciones-iibb/calcular`).then((res) => res.data),
+  calcularVentaPercepcionIibb: (ventaId, regimenId) =>
+    apiClient.post(`/api/ventas/${ventaId}/percepciones-iibb/calcular${buildQuery({ regimenId })}`).then((res) => res.data),
   getCategoriasItemsFacturables: (filters = {}) =>
     apiClient.get(`/api/ventas/categorias-items${buildQuery(filters)}`).then((res) => res.data),
   getCategoriaItemFacturable: (id) => apiClient.get(`/api/ventas/categorias-items/${id}`).then((res) => res.data),
@@ -85,7 +85,9 @@ const ventasService = {
   updateItemFacturable: (id, payload) => apiClient.put(`/api/ventas/items-facturables/${id}`, payload).then((res) => res.data),
   getVentas: (filters) => apiClient.get(`/api/ventas${buildQuery(filters)}`).then((res) => res.data),
   getVenta: (id) => apiClient.get(`/api/ventas/${id}`).then((res) => res.data),
-  createVenta: (payload) => apiClient.post('/api/ventas', payload).then((res) => res.data),
+  createVenta: (payload) => apiClient.post('/api/ventas/registro-simple', payload).then((res) => res.data),
+  obligacionesParaFactura: (params) => apiClient.get('/api/ventas/obligaciones-disponibles', { params }).then(res => res.data),
+  libroIva: (params) => apiClient.get('/api/ventas/libro-iva', { params }).then(res => res.data),
   updateVenta: (id, payload) => apiClient.put(`/api/ventas/${id}`, payload).then((res) => res.data),
   validarConfirmacionFactura: (id) =>
     apiClient.get(`/api/ventas/facturas/${id}/validacion-confirmacion`).then((res) => res.data),

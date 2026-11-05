@@ -26,14 +26,16 @@ namespace BudgetControl.Api.Services.Sales
         private readonly IContabilizacionAutomaticaService _contabilizacionAutomatica;
         private readonly IConfiguracionesContablesService _configuracionesContables;
 
+        private readonly IPercepcionIibbService _iibb;
         public VentasService(
             AppDbContext db,
             IExternalDataService externalDataService,
             IUserContext userContext,
             ICalculadorVentasService calculador,
             IContabilizacionAutomaticaService contabilizacionAutomatica,
-            IConfiguracionesContablesService configuracionesContables)
+            IConfiguracionesContablesService configuracionesContables, IPercepcionIibbService iibb)
         {
+            _iibb = iibb;
             _db = db;
             _externalDataService = externalDataService;
             _userContext = userContext;
@@ -749,6 +751,48 @@ namespace BudgetControl.Api.Services.Sales
             return MapVentaWithCurrentTotals(venta, new Dictionary<string, Client> { [venta.ClienteExternoId] = normalized.Cliente }, new Dictionary<string, Obra> { [venta.ObraExternaId] = normalized.Obra });
         }
 
+        public async Task<VentaResponse> RegistrarSimpleAsync(FacturaSimpleRequest request)
+        {
+            if (NormalizeCurrency(request.MonedaCodigo) != MonedaBase) throw new InvalidOperationException("La factura se registra en pesos.");
+            static bool Money(decimal n) => n >= 0 && decimal.Round(n, 2) == n;
+            if (request.CotizacionDolarReferencia is decimal referencia && (NormalizeCurrency(request.MonedaCodigo) != MonedaBase || referencia <= 0 || decimal.Round(referencia, 6) != referencia))
+                throw new InvalidOperationException("La referencia del dólar debe ser positiva, con hasta seis decimales y para una factura en pesos.");
+            if (request.Lineas.Count > 2 || request.Lineas.Select(x => x.AlicuotaId).Distinct().Count() != request.Lineas.Count ||
+                !Money(request.NoGravado) || !Money(request.Exento) || !Money(request.DevolucionCheques))
+                throw new InvalidOperationException("Revise los importes y las alícuotas de la factura.");
+            await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            var header = await CreateVentaAsync(request);
+            var venta = await _db.Ventas.FindAsync(header.Id) ?? throw new InvalidOperationException("Factura no encontrada.");
+            var lines = new List<LineaIvaRegistrada>();
+            foreach (var line in request.Lineas)
+            {
+                var tasa = await _db.Set<AlicuotaIvaVenta>().SingleOrDefaultAsync(t => t.Id == line.AlicuotaId && t.Activo && t.TipoTratamiento == TipoTratamientoIvaVenta.Gravado);
+                if (tasa == null || !Money(line.Neto) || line.Neto <= 0 || (!venta.TipoComprobante.PermiteIva || venta.TipoComprobante.EsExportacion) && tasa.Porcentaje != 0)
+                    throw new InvalidOperationException("Neto o alícuota no admitidos para el comprobante.");
+                lines.Add(new(line.AlicuotaId, line.Neto, tasa.Porcentaje, RoundMoney(line.Neto * tasa.Porcentaje / 100m)));
+            }
+            venta.FiscalSimpleJson = System.Text.Json.JsonSerializer.Serialize(new FiscalRegistrado(lines, request.NoGravado, request.Exento, request.DevolucionCheques, request.CotizacionDolarReferencia, ImputaNetoPlan: true));
+            _calculador.RecalcularTotales(venta);
+            if (venta.Total <= 0) throw new InvalidOperationException("El total debe ser positivo.");
+            await _db.SaveChangesAsync();
+            await _iibb.CalcularAsync(venta.Id, request.RegimenPercepcionIibbId);
+            if (request.Aplicaciones.Any()) await UpdateVinculacionesPlanAsync(venta.Id, request.Aplicaciones);
+            var result = await ConfirmarVentaAsync(venta.Id);
+            await tx.CommitAsync();
+            return result.Venta;
+        }
+
+        public async Task<object> LibroAsync(DateTime desde, DateTime hasta)
+        {
+            if (desde == default || hasta == default || hasta.Date < desde.Date || hasta.Year > 9998) throw new InvalidOperationException("Indique un período válido.");
+            var inicio = DateTime.SpecifyKind(desde.Date, DateTimeKind.Utc);
+            var fin = DateTime.SpecifyKind(hasta.Date.AddDays(1), DateTimeKind.Utc);
+            var rows = await _db.Ventas.AsNoTracking().Where(v => v.Estado == VentaEstado.Confirmada && v.FechaComprobante >= inicio && v.FechaComprobante < fin)
+                .OrderBy(v => v.FechaComprobante).ThenBy(v => v.Id).Select(v => new { v.FechaComprobante, v.PuntoVenta, v.NumeroComprobante, v.ClienteExternoId, v.MonedaCodigo, v.NetoGravado, v.TotalIva, v.TotalNoGravado, v.TotalExento, v.TotalPercepciones, v.Total, v.FiscalSimpleJson, v.TipoComprobante.Signo }).ToListAsync();
+            return rows.Select(v => { var devolucion = v.FiscalSimpleJson == null ? 0 : System.Text.Json.JsonSerializer.Deserialize<FiscalRegistrado>(v.FiscalSimpleJson)!.DevolucionCheques;
+                return new { v.FechaComprobante, v.PuntoVenta, v.NumeroComprobante, v.ClienteExternoId, v.MonedaCodigo, Neto = v.Signo*v.NetoGravado, Iva = v.Signo*v.TotalIva, NoGravado = v.Signo*(v.TotalNoGravado-devolucion), Exento = v.Signo*v.TotalExento, Iibb = v.Signo*v.TotalPercepciones, Devolucion = v.Signo*devolucion, Total = v.Signo*v.Total }; });
+        }
+
         public async Task<VentaResponse> UpdateVentaAsync(int id, VentaHeaderRequest request)
         {
             var venta = await GetVentaQuery(false).FirstOrDefaultAsync(v => v.Id == id);
@@ -883,6 +927,10 @@ namespace BudgetControl.Api.Services.Sales
             var venta = await _db.Ventas.AsNoTracking().FirstOrDefaultAsync(v => v.Id == ventaId);
             if (venta == null) throw new InvalidOperationException("Venta no encontrada.");
 
+            return await DisponiblesAsync(venta);
+        }
+        public async Task<IEnumerable<VentaObligacionVia1DisponibleResponse>> DisponiblesAsync(Venta venta)
+        {
             var obligaciones = await GetObligacionesVia1CompatiblesQuery(venta)
                 .AsNoTracking()
                 .OrderBy(c => c.TipoCuota == TipoCuota.Anticipo ? 0 : 1)
@@ -915,7 +963,7 @@ namespace BudgetControl.Api.Services.Sales
 
         public async Task<IEnumerable<VentaVinculacionPlanResponse>> UpdateVinculacionesPlanAsync(int ventaId, IEnumerable<VentaVinculacionPlanRequest> request)
         {
-            await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            await using var transaction = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
             var venta = await _db.Ventas
                 .Include(v => v.TipoComprobante)
                 .Include(v => v.Detalles)
@@ -950,7 +998,7 @@ namespace BudgetControl.Api.Services.Sales
             venta.FechaModificacion = DateTime.UtcNow;
             venta.UsuarioModificacion = _userContext.UserName;
             await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+            if (transaction != null) await transaction.CommitAsync();
 
             return await GetVinculacionesPlanAsync(ventaId);
         }
@@ -968,7 +1016,7 @@ namespace BudgetControl.Api.Services.Sales
 
         public async Task<VentaConfirmacionResponse> ConfirmarVentaAsync(int ventaId)
         {
-            await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            await using var transaction = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
             var venta = await GetVentaQuery(false).FirstOrDefaultAsync(v => v.Id == ventaId);
             if (venta == null) throw new InvalidOperationException("Venta no encontrada.");
             if (venta.Estado == VentaEstado.Confirmada) throw new InvalidOperationException("La factura ya fue confirmada.");
@@ -982,7 +1030,7 @@ namespace BudgetControl.Api.Services.Sales
 
             _calculador.RecalcularTotales(venta);
             var cantidadObligacionesAplicadas = await ValidateVinculacionesPlanForConfirmacionAsync(venta);
-            var solicitud = BuildSolicitudContable(venta);
+            var solicitud = BuildSolicitudContable(venta, validacion.ConceptosContables);
             await EnsureMovimientoCuentaCorrienteAsync(venta);
 
             var asiento = await _contabilizacionAutomatica.GenerarAsientoAutomaticoAsync(solicitud);
@@ -995,7 +1043,7 @@ namespace BudgetControl.Api.Services.Sales
             venta.UsuarioModificacion = _userContext.UserName;
 
             await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+            if (transaction != null) await transaction.CommitAsync();
 
             return new VentaConfirmacionResponse
             {
@@ -1044,21 +1092,21 @@ namespace BudgetControl.Api.Services.Sales
                 errores.Add(ex.Message);
             }
 
-            if (venta.Detalles == null || !venta.Detalles.Any())
+            if (venta.FiscalSimpleJson == null && (venta.Detalles == null || !venta.Detalles.Any()))
             {
                 errores.Add("La factura no posee detalles.");
             }
             else
             {
-                await ValidateDetallesConfirmacionAsync(venta, errores);
+                if (venta.FiscalSimpleJson == null) await ValidateDetallesConfirmacionAsync(venta, errores);
             }
 
             ValidateTotalesConfirmacion(venta, errores);
             ValidatePercepcionConfirmacion(venta, errores, advertencias);
             await ValidateVinculacionesPlanConfirmacionAsync(venta, errores);
-            await ValidateConfiguracionContableConfirmacionAsync(venta, errores);
+            var conceptos = await ValidateConfiguracionContableConfirmacionAsync(venta, errores);
 
-            return await BuildValidationResultAsync(venta, errores, advertencias);
+            return await BuildValidationResultAsync(venta, errores, advertencias, conceptos);
         }
 
         private async Task ValidateDetallesConfirmacionAsync(Venta venta, ICollection<string> errores)
@@ -1184,35 +1232,25 @@ namespace BudgetControl.Api.Services.Sales
 
         private async Task ValidateVinculacionesPlanAsync(Venta venta, List<VentaVinculacionPlanRequest> aplicaciones, bool requireCompleteAmount)
         {
-            var importeAsociable = GetImporteAsociadoPlan(venta);
+            var compatibles = await GetObligacionesVia1CompatiblesQuery(venta).ToListAsync();
+            if (!aplicaciones.Any())
+            {
+                if (requireCompleteAmount && compatibles.Any() && GetImporteAsociadoPlan(venta) > 0)
+                    throw new InvalidOperationException("Distribuya el neto de la factura entre las cuotas del plan.");
+                return;
+            }
+
+            var obligaciones = compatibles.ToDictionary(c => c.Id);
+            if (aplicaciones.Any(a => !obligaciones.ContainsKey(a.ObligacionId)))
+                throw new InvalidOperationException("Una o más cuotas no pertenecen a Vía 1 o no son compatibles con la factura.");
+            var monedas = aplicaciones.Select(a => obligaciones[a.ObligacionId].PlanPago.AcuerdoComercialVia.MonedaCodigo).Distinct().ToList();
+            if (monedas.Count != 1)
+                throw new InvalidOperationException("Seleccione cuotas de una misma moneda para esta factura.");
+            var importeAsociable = ImputacionPlanFactura.Importe(venta, monedas[0]);
             var totalAplicado = RoundMoney(aplicaciones.Sum(a => a.ImporteAplicado));
-            if (totalAplicado > importeAsociable)
-            {
-                throw new InvalidOperationException("El total aplicado al plan supera el importe comercial asociable de la factura.");
-            }
-
-            var tieneObligacionesVia1 = await GetObligacionesVia1CompatiblesQuery(venta).AnyAsync();
-            if (requireCompleteAmount && tieneObligacionesVia1 && importeAsociable > 0 && totalAplicado != importeAsociable)
-            {
-                throw new InvalidOperationException("La factura posee obligaciones de Via 1 compatibles y debe aplicar al plan el importe comercial asociable completo.");
-            }
-
-            if (!aplicaciones.Any()) return;
-            if (!tieneObligacionesVia1)
-            {
-                throw new InvalidOperationException("La factura no posee obligaciones de Via 1 compatibles para aplicar.");
-            }
-
+            if (totalAplicado > importeAsociable || (requireCompleteAmount && totalAplicado != importeAsociable))
+                throw new InvalidOperationException($"Distribuya exactamente {importeAsociable:0.00} {monedas[0]} del neto de la factura.");
             var obligacionIds = aplicaciones.Select(a => a.ObligacionId).Distinct().ToList();
-            var obligaciones = await GetObligacionesVia1CompatiblesQuery(venta)
-                .Where(c => obligacionIds.Contains(c.Id))
-                .ToDictionaryAsync(c => c.Id);
-
-            var missing = obligacionIds.Where(id => !obligaciones.ContainsKey(id)).ToList();
-            if (missing.Any())
-            {
-                throw new InvalidOperationException("Una o mas obligaciones no pertenecen a Via 1 o no son compatibles con la factura.");
-            }
 
             var balances = await BuildObligacionFacturacionBalancesAsync(obligacionIds, venta.Id);
             foreach (var aplicacion in aplicaciones)
@@ -1246,7 +1284,8 @@ namespace BudgetControl.Api.Services.Sales
                     c.PlanPago.AcuerdoComercialVia.AcuerdoComercial.Estado != AcuerdoEstado.Finalizado)
                 .Where(c => c.PlanPago.AcuerdoComercialVia.AcuerdoComercial.ClienteExternoId == venta.ClienteExternoId)
                 .Where(c => c.PlanPago.AcuerdoComercialVia.AcuerdoComercial.ObraExternaId == venta.ObraExternaId)
-                .Where(c => c.PlanPago.AcuerdoComercialVia.MonedaCodigo == venta.MonedaCodigo);
+                .Where(c => c.PlanPago.AcuerdoComercialVia.MonedaCodigo == venta.MonedaCodigo ||
+                    (venta.MonedaCodigo == "ARS" && c.PlanPago.AcuerdoComercialVia.MonedaCodigo == "USD"));
         }
 
         private IQueryable<VinculacionFacturaComercial> GetVinculacionesPlanQuery(int ventaId)
@@ -1374,52 +1413,30 @@ namespace BudgetControl.Api.Services.Sales
                 AcuerdoComercialViaId = via.Id,
                 NumeroAcuerdo = via.AcuerdoComercial.NumeroAcuerdo,
                 NumeroFactura = vinculacion.NumeroFactura,
+                MonedaCodigo = via.MonedaCodigo,
                 ImporteAplicado = RoundMoney(vinculacion.ImporteVinculado),
                 FechaVinculacion = vinculacion.FechaVinculacion
             };
         }
 
-        private async Task ValidateConfiguracionContableConfirmacionAsync(Venta venta, ICollection<string> errores)
+        private async Task<List<string>> ValidateConfiguracionContableConfirmacionAsync(Venta venta, ICollection<string> errores)
         {
             var configuracion = await _configuracionesContables.GetConfiguracionPorOperacionAsync(CodigoOperacionFacturaVenta);
             if (configuracion == null || !configuracion.Activa)
             {
                 errores.Add("La configuracion contable para la operacion FACTURA_VENTA no existe o esta inactiva.");
-                return;
+                return new();
             }
 
-            var conceptos = configuracion.Detalles.Select(d => d.Concepto).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var conceptosObligatorios = configuracion.Detalles
-                .Where(d => d.EsObligatorio)
-                .Select(d => d.Concepto)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var requerido in new[] { "CLIENTES", "VENTA_NETA" })
-            {
-                if (!conceptos.Contains(requerido))
-                {
-                    errores.Add($"La configuracion contable FACTURA_VENTA no posee el concepto {requerido}.");
-                }
-            }
+            var configurados = configuracion.Detalles.Select(d => d.Concepto).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var importes = BuildImportesContables(venta, configurados);
+            foreach (var concepto in importes.Keys.Where(c => !configurados.Contains(c)))
+                errores.Add($"Falta configurar la cuenta de {concepto} en FACTURA_VENTA.");
 
-            if (venta.TotalIva > 0 && !conceptos.Contains("IVA_DEBITO"))
-            {
-                errores.Add("La configuracion contable FACTURA_VENTA no posee el concepto IVA_DEBITO requerido por el IVA de la factura.");
-            }
+            foreach (var detalle in configuracion.Detalles.Where(d => d.EsObligatorio && !importes.ContainsKey(d.Concepto)))
+                errores.Add($"FACTURA_VENTA exige {detalle.Concepto}, pero la factura no tiene importe para ese concepto.");
 
-            if (venta.TotalIva <= 0 && conceptosObligatorios.Contains("IVA_DEBITO"))
-            {
-                errores.Add("La configuracion contable FACTURA_VENTA exige IVA_DEBITO, pero la factura no posee IVA.");
-            }
-
-            if (venta.TotalPercepciones > 0 && !conceptos.Contains("PERCEPCION_IIBB"))
-            {
-                errores.Add("La configuracion contable FACTURA_VENTA no posee el concepto PERCEPCION_IIBB requerido por la percepcion aplicada.");
-            }
-
-            if (venta.TotalPercepciones <= 0 && conceptosObligatorios.Contains("PERCEPCION_IIBB"))
-            {
-                errores.Add("La configuracion contable FACTURA_VENTA exige PERCEPCION_IIBB, pero la factura no posee percepcion aplicada.");
-            }
+            return importes.Keys.ToList();
         }
 
         private async Task EnsureMovimientoCuentaCorrienteAsync(Venta venta)
@@ -1442,19 +1459,35 @@ namespace BudgetControl.Api.Services.Sales
                 Haber = 0,
                 ModuloOrigen = ModuloOrigenVentas,
                 IdOrigen = idOrigen,
-                Descripcion = $"Factura {venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}",
+                Descripcion = $"Factura {venta.PuntoVenta:00000}-{venta.NumeroComprobante:00000000}",
                 FechaAlta = DateTime.UtcNow,
                 UsuarioAlta = _userContext.UserName
             });
         }
 
-        private static SolicitudContabilizacionAutomaticaRequest BuildSolicitudContable(Venta venta)
+        private static Dictionary<string, decimal> BuildImportesContables(Venta venta, IEnumerable<string> configurados)
         {
             var importes = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
             {
                 ["CLIENTES"] = venta.Total,
-                ["VENTA_NETA"] = GetImporteAsociadoPlan(venta)
+                ["VENTA_NETA"] = RoundMoney(venta.TotalAntesPercepciones - venta.TotalIva)
             };
+
+            if (venta.FiscalSimpleJson != null)
+            {
+                var fiscal = System.Text.Json.JsonSerializer.Deserialize<FiscalRegistrado>(venta.FiscalSimpleJson)!;
+                foreach (var (concepto, importe) in new[] {
+                    ("VENTA_NO_GRAVADA", fiscal.NoGravado),
+                    ("VENTA_EXENTA", fiscal.Exento),
+                    ("DEVOLUCION_CHEQUES", fiscal.DevolucionCheques)
+                })
+                {
+                    if (importe <= 0 || !configurados.Contains(concepto, StringComparer.OrdinalIgnoreCase)) continue;
+                    importes[concepto] = importe;
+                    importes["VENTA_NETA"] -= importe;
+                }
+            }
+            if (importes["VENTA_NETA"] == 0) importes.Remove("VENTA_NETA");
 
             if (venta.TotalIva > 0)
             {
@@ -1466,14 +1499,19 @@ namespace BudgetControl.Api.Services.Sales
                 importes["PERCEPCION_IIBB"] = venta.TotalPercepciones;
             }
 
+            return importes;
+        }
+
+        private static SolicitudContabilizacionAutomaticaRequest BuildSolicitudContable(Venta venta, IEnumerable<string> conceptos)
+        {
             return new SolicitudContabilizacionAutomaticaRequest
             {
                 CodigoOperacion = CodigoOperacionFacturaVenta,
                 ModuloOrigen = ModuloOrigenVentas,
                 IdOrigen = venta.Id.ToString(),
                 Fecha = venta.FechaComprobante,
-                Descripcion = $"Factura de venta {venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}",
-                ImportesPorConcepto = importes
+                Descripcion = $"Factura de venta {venta.PuntoVenta:00000}-{venta.NumeroComprobante:00000000}",
+                ImportesPorConcepto = BuildImportesContables(venta, conceptos)
             };
         }
 
@@ -1488,11 +1526,11 @@ namespace BudgetControl.Api.Services.Sales
                 ImporteAsociadoPlan = venta == null ? 0 : GetImporteAsociadoPlan(venta),
                 CantidadObligacionesAplicadas = cantidadObligacionesAplicadas,
                 CodigoOperacionContable = CodigoOperacionFacturaVenta,
-                ConceptosContables = BuildSolicitudConceptos(venta)
+                ConceptosContables = new()
             };
         }
 
-        private async Task<VentaConfirmacionValidacionResponse> BuildValidationResultAsync(Venta venta, List<string> errores, List<string> advertencias)
+        private async Task<VentaConfirmacionValidacionResponse> BuildValidationResultAsync(Venta venta, List<string> errores, List<string> advertencias, List<string> conceptos)
         {
             return new VentaConfirmacionValidacionResponse
             {
@@ -1503,7 +1541,7 @@ namespace BudgetControl.Api.Services.Sales
                 ImporteAsociadoPlan = GetImporteAsociadoPlan(venta),
                 CantidadObligacionesAplicadas = await GetCantidadObligacionesAplicadasAsync(venta.Id),
                 CodigoOperacionContable = CodigoOperacionFacturaVenta,
-                ConceptosContables = BuildSolicitudConceptos(venta)
+                ConceptosContables = conceptos
             };
         }
 
@@ -1518,25 +1556,9 @@ namespace BudgetControl.Api.Services.Sales
                 .CountAsync();
         }
 
-        private static List<string> BuildSolicitudConceptos(Venta? venta)
-        {
-            var conceptos = new List<string> { "CLIENTES", "VENTA_NETA" };
-            if ((venta?.TotalIva ?? 0) > 0)
-            {
-                conceptos.Add("IVA_DEBITO");
-            }
-
-            if ((venta?.TotalPercepciones ?? 0) > 0)
-            {
-                conceptos.Add("PERCEPCION_IIBB");
-            }
-
-            return conceptos;
-        }
-
         private static decimal GetImporteAsociadoPlan(Venta venta)
         {
-            return RoundMoney(venta.TotalAntesPercepciones - venta.TotalIva);
+            return RoundMoney(ImputacionPlanFactura.Neto(venta));
         }
 
         private static decimal RoundMoney(decimal value)
@@ -1551,7 +1573,7 @@ namespace BudgetControl.Api.Services.Sales
 
         private static string BuildNumeroFactura(Venta venta)
         {
-            return $"{venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}";
+            return $"{venta.PuntoVenta:00000}-{venta.NumeroComprobante:00000000}";
         }
 
         private IQueryable<Venta> GetVentaQuery(bool asNoTracking = true)
@@ -1762,7 +1784,7 @@ namespace BudgetControl.Api.Services.Sales
             if (obra == null) throw new InvalidOperationException("Obra no encontrada.");
             if (obra.ClienteId != cliente.IdCliente) throw new InvalidOperationException("La obra seleccionada no pertenece al cliente indicado.");
             if (request.FechaComprobante == default) throw new InvalidOperationException("La fecha del comprobante es obligatoria.");
-            if (request.NumeroComprobante <= 0) throw new InvalidOperationException("El numero de comprobante debe ser mayor que cero.");
+            if (request.NumeroComprobante is <= 0 or > 99999999) throw new InvalidOperationException("El numero de comprobante debe estar entre 1 y 99999999.");
 
             var moneda = NormalizeCurrency(request.MonedaCodigo);
             if (string.IsNullOrWhiteSpace(moneda)) throw new InvalidOperationException("La moneda es obligatoria.");
@@ -1806,7 +1828,7 @@ namespace BudgetControl.Api.Services.Sales
             }
 
             if (request.TipoComprobanteVentaId <= 0) throw new InvalidOperationException("La configuracion de comprobante es obligatoria.");
-            if (request.PuntoVenta <= 0) throw new InvalidOperationException("El punto de venta debe ser mayor que cero.");
+            if (request.PuntoVenta is <= 0 or > 99999) throw new InvalidOperationException("El punto de venta debe estar entre 1 y 99999.");
 
             var relacion = await query.FirstOrDefaultAsync(r =>
                 r.TipoComprobanteVentaId == request.TipoComprobanteVentaId &&
@@ -1828,7 +1850,7 @@ namespace BudgetControl.Api.Services.Sales
 
         private async Task ValidatePuntoVentaRequestAsync(PuntoVentaRequest request, int? id)
         {
-            if (request.Numero <= 0) throw new InvalidOperationException("El numero de punto de venta debe ser mayor que cero.");
+            if (request.Numero is <= 0 or > 99999) throw new InvalidOperationException("El numero de punto de venta debe estar entre 1 y 99999.");
             NormalizeRequired(request.Descripcion, "La descripcion del punto de venta es obligatoria.");
 
             var exists = await _db.PuntosVenta.AnyAsync(p => p.Numero == request.Numero && (!id.HasValue || p.Id != id.Value));
@@ -2098,7 +2120,7 @@ namespace BudgetControl.Api.Services.Sales
                 PuntoVentaId = relacion.PuntoVentaId,
                 Numero = relacion.PuntoVenta.Numero,
                 Descripcion = relacion.PuntoVenta.Descripcion,
-                TextoMostrar = $"{relacion.PuntoVenta.Numero:0000} - {relacion.PuntoVenta.Descripcion}",
+                TextoMostrar = $"{relacion.PuntoVenta.Numero:00000} - {relacion.PuntoVenta.Descripcion}",
                 Habilitado = habilitado
             };
         }
@@ -2236,6 +2258,8 @@ namespace BudgetControl.Api.Services.Sales
 
             return new VentaResponse
             {
+                AsientoContableId = venta.AsientoContableId,
+                FiscalSimple = venta.FiscalSimpleJson == null ? null : System.Text.Json.JsonSerializer.Deserialize<FiscalRegistrado>(venta.FiscalSimpleJson),
                 Id = venta.Id,
                 TipoComprobanteVentaId = venta.TipoComprobanteVentaId,
                 PuntoVentaComprobanteId = venta.PuntoVentaComprobanteId,

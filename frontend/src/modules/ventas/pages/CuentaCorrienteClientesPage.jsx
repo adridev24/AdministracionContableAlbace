@@ -45,6 +45,8 @@ const dateText = (value) => value ? String(value).slice(0, 10) : '-';
 
 const CuentaCorrienteClientesPage = () => {
   const [filters, setFilters] = useState(initialFilters);
+  const [consulta, setConsulta] = useState(null);
+  const [exportando, setExportando] = useState(false);
   const [cuenta, setCuenta] = useState(null);
   const [expandedFacturas, setExpandedFacturas] = useState({});
   const [loading, setLoading] = useState(false);
@@ -83,11 +85,31 @@ const CuentaCorrienteClientesPage = () => {
       const { clienteExternoId, ...query } = filters;
       const response = await cuentaCorrienteClientesService.getCuentaCorriente(clienteExternoId, query);
       setCuenta(response);
+      setConsulta({ ...filters });
     } catch (searchError) {
       setCuenta(null);
       setError(getErrorMessage(searchError));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const exportarExcel = async () => {
+    setExportando(true);
+    setError('');
+    try {
+      const { clienteExternoId, ...query } = consulta;
+      const blob = await cuentaCorrienteClientesService.exportarExcel(clienteExternoId, query);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'cuenta-corriente.xlsx';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setError('No se pudo exportar la cuenta corriente.');
+    } finally {
+      setExportando(false);
     }
   };
 
@@ -160,7 +182,8 @@ const CuentaCorrienteClientesPage = () => {
 
       {cuenta && !loading && (
         <>
-          <SectionCard title={cuenta.clienteNombre || cuenta.clienteId} description="Saldos separados por moneda.">
+          <SectionCard title={cuenta.clienteNombre || cuenta.clienteId} description="Saldos separados por moneda."
+            actions={<button className="btn-secondary" type="button" onClick={exportarExcel} disabled={exportando}>{exportando ? 'Exportando...' : 'Exportar a Excel'}</button>}>
             {cuenta.saldosPorMoneda.length === 0 ? (
               <p className="empty-state">No hay movimientos para los filtros seleccionados.</p>
             ) : (

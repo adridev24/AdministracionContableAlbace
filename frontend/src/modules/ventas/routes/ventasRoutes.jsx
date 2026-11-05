@@ -1,3 +1,4 @@
+import LibroIva from '../components/LibroIva';
 import VentasHomePage from '../pages/VentasHomePage';
 import VentaDetallePage from '../pages/VentaDetallePage';
 import ParametrizacionVentasPage from '../pages/ParametrizacionVentasPage';
@@ -12,6 +13,7 @@ import ItemsFacturablesPage from '../pages/ItemsFacturablesPage';
 import CuentaCorrienteClientesPage from '../pages/CuentaCorrienteClientesPage';
 
 const ventasRoutes = [
+  { path: '/ventas/libro-iva', element: <LibroIva /> },
   {
     path: '/ventas',
     element: <VentasHomePage />,

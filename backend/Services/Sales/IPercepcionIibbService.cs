@@ -7,6 +7,6 @@ namespace BudgetControl.Api.Services.Sales
         Task<ClientePercepcionIibbConfigResponse?> GetClienteConfigAsync(string clienteExternoId);
         Task<ClientePercepcionIibbConfigResponse> SaveClienteConfigAsync(ClientePercepcionIibbConfigRequest request);
         Task<VentaPercepcionIibbResponse?> GetPercepcionAsync(int ventaId);
-        Task<VentaPercepcionIibbCalculoResponse> CalcularAsync(int ventaId);
+        Task<VentaPercepcionIibbCalculoResponse> CalcularAsync(int ventaId, int? regimenFacturaId = null);
     }
 }

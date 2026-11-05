@@ -151,6 +151,17 @@ namespace BudgetControl.Api.Services.Collections
             return (await GetCobranzaAsync(cobranza.Id))!;
         }
 
+        public async Task EliminarBorradorAsync(int id)
+        {
+            // Check state atomically with deletion to protect concurrent confirmations.
+            var eliminadas = await _db.Cobranzas
+                .Where(c => c.Id == id && c.Estado == CobranzaEstado.Borrador && c.AsientoContableId == null
+                    && !c.MediosPago.Any(m => m.ChequeTercero != null))
+                .ExecuteDeleteAsync();
+            if (eliminadas == 0 && await _db.Cobranzas.AnyAsync(c => c.Id == id))
+                throw new InvalidOperationException("Solo puede eliminarse una cobranza en borrador sin asiento ni cheques en cartera.");
+        }
+
         public async Task<CobranzaResponse> UpdateCobranzaAsync(int id, CobranzaHeaderRequest request)
         {
             var cobranza = await _db.Cobranzas.FirstOrDefaultAsync(c => c.Id == id);
@@ -474,7 +485,7 @@ namespace BudgetControl.Api.Services.Collections
                     .ThenInclude(a => a.AplicacionesMediosPago)
                 .Include(c => c.AplicacionesFactura)
                     .ThenInclude(a => a.AplicacionesObligacion)
-                        .ThenInclude(o => o.CuotaComercial)
+                        .ThenInclude(o => o.CuotaComercial).ThenInclude(c => c.PlanPago).ThenInclude(p => p.AcuerdoComercialVia)
                 .AsQueryable();
 
             return tracking ? query : query.AsNoTracking();
@@ -526,7 +537,8 @@ namespace BudgetControl.Api.Services.Collections
 
             var via1 = vinculaciones
                 .Where(v => v.CuotaComercial.PlanPago.AcuerdoComercialVia.ViaOperacion == ViaOperacion.Via1)
-                .Where(v => v.CuotaComercial.PlanPago.AcuerdoComercialVia.MonedaCodigo == cobranza.MonedaCodigo)
+                .Where(v => v.CuotaComercial.PlanPago.AcuerdoComercialVia.MonedaCodigo == cobranza.MonedaCodigo ||
+                    (cobranza.MonedaCodigo == "ARS" && v.CuotaComercial.PlanPago.AcuerdoComercialVia.MonedaCodigo == "USD"))
                 .Where(v => v.CuotaComercial.PlanPago.AcuerdoComercialVia.AcuerdoComercial.ClienteExternoId == cobranza.ClienteExternoId)
                 .ToList();
 
@@ -548,16 +560,14 @@ namespace BudgetControl.Api.Services.Collections
                 .ToList();
 
             var cuotaIds = grupos.Select(g => g.Cuota.Id).ToList();
-            var confirmadoPorCuota = await _db.CobranzasAplicacionesObligacion
-                .AsNoTracking()
-                .Where(o => cuotaIds.Contains(o.CuotaComercialId) &&
-                    o.AplicacionFactura.VentaId == aplicacion.VentaId &&
-                    o.AplicacionFactura.Cobranza.Estado == CobranzaEstado.Confirmada)
-                .GroupBy(o => o.CuotaComercialId)
-                .Select(g => new { CuotaId = g.Key, Importe = g.Sum(x => x.ImporteAplicado) })
-                .ToDictionaryAsync(x => x.CuotaId, x => x.Importe);
-
-            var restante = RoundMoney(aplicacion.ImporteAplicado);
+            if (via1.Select(v => v.CuotaComercial.PlanPago.AcuerdoComercialVia.MonedaCodigo).Distinct().Count() != 1)
+                throw new InvalidOperationException("La factura tiene cuotas de distintas monedas. Revise sus vinculaciones.");
+            var confirmadoPorCuota = await SaldosCuotasCobranza.ObtenerAsync(_db, cuotaIds, aplicacion.VentaId);
+            var balances = await BuildFacturaBalancesAsync(new[] { aplicacion.Venta }, cobranza.Id, aplicacion.Id);
+            var cobrado = balances[aplicacion.VentaId].CobradoConfirmado;
+            var totalPlan = grupos.Sum(g => g.ImporteFacturado);
+            var objetivoAcumulado = RoundMoney(totalPlan * Math.Min((cobrado + aplicacion.ImporteAplicado) / aplicacion.Venta.Total, 1));
+            var restante = Math.Max(0, RoundMoney(objetivoAcumulado - confirmadoPorCuota.Values.Sum()));
             foreach (var grupo in grupos)
             {
                 if (restante <= 0) break;
@@ -793,14 +803,7 @@ namespace BudgetControl.Api.Services.Collections
 
             if (!cuotaIds.Any()) return;
 
-            var importesConfirmados = await _db.CobranzasAplicacionesObligacion
-                .AsNoTracking()
-                .Where(a => cuotaIds.Contains(a.CuotaComercialId) &&
-                    a.AplicacionFactura.CobranzaId != cobranza.Id &&
-                    a.AplicacionFactura.Cobranza.Estado == CobranzaEstado.Confirmada)
-                .GroupBy(a => a.CuotaComercialId)
-                .Select(g => new { CuotaId = g.Key, Importe = g.Sum(a => a.ImporteAplicado) })
-                .ToDictionaryAsync(g => g.CuotaId, g => g.Importe);
+            var importesConfirmados = await SaldosCuotasCobranza.ObtenerAsync(_db, cuotaIds, excluirCobranzaId: cobranza.Id);
 
             var cuotas = await _db.CuotasComerciales
                 .Where(c => cuotaIds.Contains(c.Id))
@@ -944,13 +947,10 @@ namespace BudgetControl.Api.Services.Collections
             if (medio == null) throw new InvalidOperationException("Medio de pago no encontrado.");
             if (!medio.Activo) throw new InvalidOperationException("El medio de pago se encuentra inactivo.");
             if (RoundMoney(request.Importe) <= 0) throw new InvalidOperationException("El importe del medio de pago debe ser mayor a cero.");
-            if (medio.RequiereReferencia && string.IsNullOrWhiteSpace(request.NumeroReferencia)) throw new InvalidOperationException("El medio de pago requiere referencia.");
             if (medio.RequiereFechaValor && !request.FechaValor.HasValue) throw new InvalidOperationException("El medio de pago requiere fecha valor.");
             if (string.Equals(medio.Codigo, "CHEQUE", StringComparison.OrdinalIgnoreCase))
             {
                 if (!request.FechaEmision.HasValue) throw new InvalidOperationException("El cheque requiere fecha de emision.");
-                if (string.IsNullOrWhiteSpace(request.Librador)) throw new InvalidOperationException("El cheque requiere librador.");
-                if (string.IsNullOrWhiteSpace(request.CuitLibrador)) throw new InvalidOperationException("El cheque requiere CUIT del librador.");
             }
 
             BancoCobranza? banco = null;
@@ -1090,7 +1090,7 @@ namespace BudgetControl.Api.Services.Collections
                 Descripcion = medio.Descripcion,
                 CodigoConceptoContable = medio.CodigoConceptoContable,
                 Activo = medio.Activo,
-                RequiereReferencia = medio.RequiereReferencia,
+                RequiereReferencia = false,
                 RequiereBanco = medio.RequiereBanco,
                 RequiereFechaValor = medio.RequiereFechaValor,
                 Orden = medio.Orden
@@ -1161,6 +1161,7 @@ namespace BudgetControl.Api.Services.Collections
                 CuotaComercialId = obligacion.CuotaComercialId,
                 TipoObligacion = obligacion.TipoObligacion,
                 NumeroCuota = obligacion.CuotaComercial.NumeroCuota,
+                MonedaCodigo = obligacion.CuotaComercial.PlanPago.AcuerdoComercialVia.MonedaCodigo,
                 FechaVencimiento = obligacion.CuotaComercial.FechaVencimiento,
                 ImporteAplicado = obligacion.ImporteAplicado
             };
@@ -1223,7 +1224,7 @@ namespace BudgetControl.Api.Services.Collections
 
         private static string BuildComprobante(Venta venta)
         {
-            return $"{venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}";
+            return $"{venta.PuntoVenta:00000}-{venta.NumeroComprobante:00000000}";
         }
 
         private static string BuildTipoMovimientoCobranza(int ventaId)

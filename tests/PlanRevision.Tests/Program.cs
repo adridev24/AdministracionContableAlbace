@@ -41,7 +41,11 @@ try
     var current = db.GetService<IDesignTimeModel>().Model;
     var migration = new RevisionPlanPagoAudit();
     var target = initializer.Initialize(migration.TargetModel, designTime: true);
-    Check(!differ.HasDifferences(target.GetRelationalModel(), current.GetRelationalModel()), "migration target matches current EF model");
+    var fiscalMigration = new FacturacionSimple();
+    var fiscalTarget = initializer.Initialize(fiscalMigration.TargetModel, designTime: true);
+    var retencionesMigration = new RetencionesSussIvaCobranza();
+    var retencionesTarget = initializer.Initialize(retencionesMigration.TargetModel, designTime: true);
+    Check(!differ.HasDifferences(retencionesTarget.GetRelationalModel(), current.GetRelationalModel()), "latest migration matches current EF model");
     var snapshot = initializer.Initialize(db.GetService<IMigrationsAssembly>().ModelSnapshot!.Model, designTime: true);
     Check(!differ.HasDifferences(snapshot.GetRelationalModel(), current.GetRelationalModel()), "snapshot matches current EF model");
     foreach (var type in new[] { typeof(AcuerdoComercialVia), typeof(PlanPago), typeof(CuotaComercial) })
@@ -77,6 +81,14 @@ try
         foreach (var command in up) await db.Database.ExecuteSqlRawAsync(command.CommandText);
         await tx.CommitAsync();
     }
+    foreach (var command in sqlGenerator.Generate(fiscalMigration.UpOperations, fiscalTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
+    foreach (var command in sqlGenerator.Generate(retencionesMigration.UpOperations, retencionesTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
+    Check(await db.MediosPagoCobranza.CountAsync(m => m.Activo && (m.Codigo == "RETENCION_SUSS" || m.Codigo == "RETENCION_IVA")) == 2, "SUSS and IVA withholding methods available after migration");
+    var fiscal = new BudgetControl.Api.DTOs.Sales.FiscalRegistrado(new() { new(1,100,21,21), new(2,200,10.5m,21) },10,5,20);
+    var invoice = new BudgetControl.Api.Models.Sales.Venta { FiscalSimpleJson = System.Text.Json.JsonSerializer.Serialize(fiscal) };
+    invoice.PercepcionesIibb.Add(new() { Activa = true, Importe = 6 });
+    new BudgetControl.Api.Services.Sales.CalculadorVentasService().RecalcularTotales(invoice);
+    Check(invoice.Total == 383 && invoice.TotalNoGravado == 30 && invoice.TotalIva == 42, "simple invoice without items preserves two VAT bases and counts returned cheque once");
     await using var connection = new NpgsqlConnection(connectionString);
     await connection.OpenAsync();
     async Task<long> Scalar(string sql)
@@ -89,6 +101,7 @@ try
     await ConcurrencyTests.RunAsync(NewContext, connectionString, Check);
     await RevisionOperationTests.RunAsync(NewContext, connectionString, Check);
     await PagoPlanificadoTests.RunAsync(NewContext, Check);
+    await FacturaSimpleTests.Run(NewContext, Check);
 
     // DDL rollback proves no partially installed schema; data below are disposable fixtures only.
     await using (var tx = await db.Database.BeginTransactionAsync())

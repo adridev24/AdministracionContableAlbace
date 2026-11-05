@@ -56,6 +56,20 @@ namespace BudgetControl.Api.Controllers.Collections
             }
         }
 
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> EliminarBorrador(int id)
+        {
+            try
+            {
+                await _service.EliminarBorradorAsync(id);
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateCobranza(int id, [FromBody] CobranzaHeaderRequest request)
         {

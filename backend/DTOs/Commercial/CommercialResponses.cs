@@ -107,6 +107,7 @@ namespace BudgetControl.Api.DTOs.Commercial
 
     public class AcuerdoSituacionVia1FacturaResponse
     {
+        public string MonedaFactura { get; set; } = string.Empty;
         public int VentaId { get; set; }
         public string Comprobante { get; set; } = null!;
         public DateTime Fecha { get; set; }

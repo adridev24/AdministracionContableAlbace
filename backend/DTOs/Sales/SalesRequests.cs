@@ -3,6 +3,19 @@ using BudgetControl.Api.Models.Sales;
 
 namespace BudgetControl.Api.DTOs.Sales
 {
+    public record LineaIvaInput(int AlicuotaId, decimal Neto);
+    public record LineaIvaRegistrada(int AlicuotaId, decimal Neto, decimal Porcentaje, decimal Iva);
+    public record FiscalRegistrado(List<LineaIvaRegistrada> Lineas, decimal NoGravado, decimal Exento, decimal DevolucionCheques, decimal? CotizacionDolarReferencia = null, bool ImputaNetoPlan = false);
+    public class FacturaSimpleRequest : VentaHeaderRequest
+    {
+        public int? RegimenPercepcionIibbId { get; set; }
+        public decimal? CotizacionDolarReferencia { get; set; }
+        [Required] public List<LineaIvaInput> Lineas { get; set; } = new();
+        public decimal NoGravado { get; set; }
+        public decimal Exento { get; set; }
+        public decimal DevolucionCheques { get; set; }
+        public List<VentaVinculacionPlanRequest> Aplicaciones { get; set; } = new();
+    }
     public class VentaHeaderRequest
     {
         [Required]

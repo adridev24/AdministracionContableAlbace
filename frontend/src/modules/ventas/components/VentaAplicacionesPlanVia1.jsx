@@ -1,3 +1,4 @@
+import NumericInput from '../../../shared/components/NumericInput';
 import { formatCalendarDate } from '../../../shared/utils/calendarDate';
 import { useEffect, useMemo, useState } from 'react';
 import SectionCard from '../../../shared/components/SectionCard';
@@ -8,10 +9,11 @@ const formatMoney = (value) => Number(value || 0).toLocaleString('es-AR', { mini
 
 const getErrorMessage = (error) => error?.response?.data?.error || 'No se pudieron guardar las aplicaciones al plan.';
 
-const getImporteAsociable = (venta) => Number((venta?.totalAntesPercepciones || 0) - (venta?.totalIva || 0));
+const getImporteAsociable = (venta) => venta?.fiscalSimple?.imputaNetoPlan ? Number(venta.netoGravado || 0) : Number((venta?.totalAntesPercepciones || 0) - (venta?.totalIva || 0));
 
 const VentaAplicacionesPlanVia1 = ({ venta, readOnly = false, disabled = false, onSaved }) => {
   const [obligaciones, setObligaciones] = useState([]);
+  const [monedaPlan, setMonedaPlan] = useState(venta?.monedaCodigo || 'ARS');
   const [vinculaciones, setVinculaciones] = useState([]);
   const [aplicaciones, setAplicaciones] = useState({});
   const [loading, setLoading] = useState(false);
@@ -20,7 +22,8 @@ const VentaAplicacionesPlanVia1 = ({ venta, readOnly = false, disabled = false, 
   const [message, setMessage] = useState('');
 
   const ventaId = venta?.id;
-  const importeAsociable = getImporteAsociable(venta);
+  const tasa = monedaPlan === venta?.monedaCodigo ? 1 : Number(venta?.fiscalSimple?.cotizacionDolarReferencia || 0);
+  const importeAsociable = tasa > 0 ? Math.round(getImporteAsociable(venta) / tasa * 100) / 100 : 0;
 
   const loadData = async () => {
     if (!ventaId) return;
@@ -40,6 +43,7 @@ const VentaAplicacionesPlanVia1 = ({ venta, readOnly = false, disabled = false, 
       nextVinculaciones.forEach((item) => {
         nextAplicaciones[item.obligacionId] = item.importeAplicado || 0;
       });
+      setMonedaPlan(nextVinculaciones[0]?.monedaCodigo || nextObligaciones[0]?.monedaCodigo || venta.monedaCodigo);
       setObligaciones(nextObligaciones);
       setVinculaciones(nextVinculaciones);
       setAplicaciones(nextAplicaciones);
@@ -65,7 +69,7 @@ const VentaAplicacionesPlanVia1 = ({ venta, readOnly = false, disabled = false, 
           numeroCuota: item.numeroCuota,
           fechaVencimiento: item.fechaVencimiento,
           numeroAcuerdo: item.numeroAcuerdo,
-          monedaCodigo: venta?.monedaCodigo || '',
+          monedaCodigo: item.monedaCodigo || venta?.monedaCodigo || '',
           importePrevisto: item.importeAplicado,
           importeFacturadoConfirmado: 0,
           importeReservado: 0,
@@ -74,8 +78,8 @@ const VentaAplicacionesPlanVia1 = ({ venta, readOnly = false, disabled = false, 
         });
       }
     });
-    return Array.from(byId.values());
-  }, [obligaciones, vinculaciones, venta?.monedaCodigo]);
+    return Array.from(byId.values()).filter(row => row.monedaCodigo === monedaPlan);
+  }, [obligaciones, vinculaciones, venta?.monedaCodigo, monedaPlan]);
 
   const totalAplicado = useMemo(
     () => Object.values(aplicaciones).reduce((sum, value) => sum + Number(value || 0), 0),
@@ -125,11 +129,16 @@ const VentaAplicacionesPlanVia1 = ({ venta, readOnly = false, disabled = false, 
   };
 
   return (
-    <SectionCard title="Aplicacion al Plan de Pago" description="Asociacion comercial de la factura con obligaciones de Via 1.">
+    <SectionCard title="Aplicacion al Plan de Pago" description={"Importes de las cuotas expresados en " + monedaPlan + (tasa !== 1 ? " · Cotización de la factura " + tasa + " ARS/USD" : "")}>
       {loading ? (
         <p className="empty-state">Cargando obligaciones de Via 1...</p>
       ) : (
         <>
+          {!readOnly && <label className="form-field">Moneda del plan
+            <select value={monedaPlan} onChange={e => { setMonedaPlan(e.target.value); setAplicaciones({}); }}>
+              {[...new Set(obligaciones.map(o => o.monedaCodigo))].map(m => <option key={m}>{m}</option>)}
+            </select>
+          </label>}
           <div className="summary-grid">
             <div><span>Importe asociable</span><strong>{formatMoney(importeAsociable)}</strong></div>
             <div><span>Total aplicado</span><strong>{formatMoney(totalAplicado)}</strong></div>
@@ -169,13 +178,13 @@ const VentaAplicacionesPlanVia1 = ({ venta, readOnly = false, disabled = false, 
                       {readOnly ? (
                         <strong>{formatMoney(aplicaciones[row.obligacionId])}</strong>
                       ) : (
-                        <input
-                          type="number"
+                        <NumericInput
+                          
                           min="0"
                           step="0.01"
                           value={aplicaciones[row.obligacionId] ?? ''}
                           onChange={(event) => setImporte(row.obligacionId, event.target.value)}
-                          disabled={disabled || saving}
+                          disabled={disabled || saving || !tasa}
                         />
                       )}
                     </td>

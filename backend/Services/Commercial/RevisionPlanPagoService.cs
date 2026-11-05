@@ -13,6 +13,9 @@ namespace BudgetControl.Api.Services.Commercial;
 
 public sealed class RevisionPlanPagoService : IRevisionPlanPagoService
 {
+    private static bool TieneCotizacionFactura(string? json) =>
+        json != null && System.Text.Json.JsonSerializer.Deserialize<BudgetControl.Api.DTOs.Sales.FiscalRegistrado>(json)?.CotizacionDolarReferencia > 0;
+
     private readonly AppDbContext _db;
     private readonly IHttpContextAccessor _http;
     public RevisionPlanPagoService(AppDbContext db, IHttpContextAccessor http) { _db = db; _http = http; }
@@ -251,10 +254,10 @@ public sealed class RevisionPlanPagoService : IRevisionPlanPagoService
         var payments = await _db.AplicacionesPagoComerciales.AsNoTracking().Where(a => a.CuotaComercialId != null && ids.Contains(a.CuotaComercialId.Value))
             .Select(a => new { Id = a.CuotaComercialId!.Value, a.PagoComercial.Estado }).ToListAsync(ct);
         var collections = await _db.CobranzasAplicacionesObligacion.AsNoTracking().Where(a => ids.Contains(a.CuotaComercialId))
-            .Select(a => new { Id = a.CuotaComercialId, a.ImporteAplicado, a.AplicacionFactura.Cobranza.Estado, a.AplicacionFactura.Cobranza.MonedaCodigo }).ToListAsync(ct);
+            .Select(a => new { Id = a.CuotaComercialId, a.ImporteAplicado, a.AplicacionFactura.Cobranza.Estado, a.AplicacionFactura.Cobranza.MonedaCodigo, MonedaFactura = a.AplicacionFactura.Venta.MonedaCodigo, a.AplicacionFactura.Venta.FiscalSimpleJson }).ToListAsync(ct);
         var links = await _db.VinculacionesFacturaComerciales.AsNoTracking().Where(a => ids.Contains(a.CuotaComercialId)).ToListAsync(ct);
         var saleIds = links.Select(a => int.TryParse(a.FacturaExternaId, out var id) ? id : 0).Distinct().ToList();
-        var sales = await _db.Ventas.AsNoTracking().Where(v => saleIds.Contains(v.Id)).Select(v => new { v.Id, v.Estado, v.MonedaCodigo }).ToDictionaryAsync(v => v.Id, ct);
+        var sales = await _db.Ventas.AsNoTracking().Where(v => saleIds.Contains(v.Id)).Select(v => new { v.Id, v.Estado, v.MonedaCodigo, v.FiscalSimpleJson }).ToDictionaryAsync(v => v.Id, ct);
         var adjustments = await _db.AjustesCuotaComerciales.AsNoTracking().Where(a => ids.Contains(a.CuotaComercialId)).Select(a => a.CuotaComercialId).ToListAsync(ct);
         var audited = await _db.RevisionesPlanesPagoDetalles.AsNoTracking().Where(d => d.PlanPagoId == plan.Id).Select(d => new { d.CuotaOriginalId, d.NumeroCuota }).ToListAsync(ct);
         var history = new HashSet<int>();
@@ -272,9 +275,9 @@ public sealed class RevisionPlanPagoService : IRevisionPlanPagoService
         if (via.ViaOperacion == ViaOperacion.Via1)
         {
             var valid = collections.Where(c => c.Estado == CobranzaEstado.Confirmada).ToList();
-            if (valid.Any(c => !string.Equals(c.MonedaCodigo, via.MonedaCodigo, StringComparison.OrdinalIgnoreCase)))
+            if (valid.Any(c => !string.Equals(c.MonedaCodigo, via.MonedaCodigo, StringComparison.OrdinalIgnoreCase) && !(c.MonedaCodigo == "ARS" && c.MonedaFactura == "ARS" && via.MonedaCodigo == "USD" && TieneCotizacionFactura(c.FiscalSimpleJson))))
                 throw new InvalidOperationException("Existen cobranzas en una moneda distinta de la vía; se requiere conciliación previa.");
-            paid = valid.Sum(c => c.ImporteAplicado);
+            paid = (await BudgetControl.Api.Services.Collections.SaldosCuotasCobranza.ObtenerAsync(_db, ids)).Values.Sum();
         }
         else
         {
@@ -309,7 +312,7 @@ public sealed class RevisionPlanPagoService : IRevisionPlanPagoService
                 if (!int.TryParse(link.FacturaExternaId, out var saleId) || !sales.TryGetValue(saleId, out var sale))
                     reasons.Add("Tiene una factura cuyo estado no puede verificarse; requiere conciliación previa.");
                 else if (sale.Estado != VentaEstado.Anulada) reasons.Add("Tiene una factura activa o en borrador; requiere anulación formal previa.");
-                else if (!string.Equals(sale.MonedaCodigo, via.MonedaCodigo, StringComparison.OrdinalIgnoreCase)) reasons.Add("La factura histórica tiene una moneda incompatible.");
+                else if (!string.Equals(sale.MonedaCodigo, via.MonedaCodigo, StringComparison.OrdinalIgnoreCase) && !(sale.MonedaCodigo == "ARS" && via.MonedaCodigo == "USD" && TieneCotizacionFactura(sale.FiscalSimpleJson))) reasons.Add("La factura histórica tiene una moneda incompatible.");
             }
             var reason = reasons.Count == 0 ? null : string.Join(" ", reasons.Distinct());
             var retiro = reason ?? (cuota.TipoCuota == TipoCuota.Cuota && cuota.Id != last?.Id ? "Solo puede retirarse la última cuota ordinaria activa." : null);

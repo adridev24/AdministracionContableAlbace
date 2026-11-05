@@ -1106,7 +1106,9 @@ namespace BudgetControl.Api.Data
                     BuildMedioPagoCobranzaSeed(2, "TRANSFERENCIA", "Transferencia bancaria", "BANCO", true, true, true, 20),
                     BuildMedioPagoCobranzaSeed(3, "CHEQUE", "Cheque de terceros", "CHEQUES_TERCEROS", true, true, true, 30),
                     BuildMedioPagoCobranzaSeed(4, "RETENCION_GANANCIAS", "Retencion de Ganancias sufrida", "RETENCION_GANANCIAS_SUFRIDA", true, false, false, 40),
-                    BuildMedioPagoCobranzaSeed(5, "RETENCION_IIBB", "Retencion de IIBB sufrida", "RETENCION_IIBB_SUFRIDA", true, false, false, 50)
+                    BuildMedioPagoCobranzaSeed(5, "RETENCION_IIBB", "Retencion de IIBB sufrida", "RETENCION_IIBB_SUFRIDA", true, false, false, 50),
+                    BuildMedioPagoCobranzaSeed(6, "RETENCION_SUSS", "Retención SUSS sufrida", "RETENCION_SUSS_SUFRIDA", true, false, false, 60),
+                    BuildMedioPagoCobranzaSeed(7, "RETENCION_IVA", "Retención IVA sufrida", "RETENCION_IVA_SUFRIDA", true, false, false, 70)
                 );
             });
 

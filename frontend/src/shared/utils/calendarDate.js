@@ -21,3 +21,11 @@ export const calendarDateToApi = (value) => {
   const date = calendarDateValue(value);
   return date ? `${date}T00:00:00.000Z` : null;
 };
+
+export const todayArgentina = (now = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const part = type => parts.find(p => p.type === type).value;
+  return part('year') + '-' + part('month') + '-' + part('day');
+};

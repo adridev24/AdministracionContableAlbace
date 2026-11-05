@@ -9,8 +9,8 @@ namespace BudgetControl.Api.Services.Accounting
     {
         private static readonly IReadOnlyList<TipoOperacionContableResponse> TiposOperacion = new List<TipoOperacionContableResponse>
         {
-            new() { Codigo = "FACTURA_VENTA", Descripcion = "Factura de venta", ConceptosSugeridos = new() { "CLIENTES", "VENTA_NETA", "IVA_DEBITO", "PERCEPCION_IIBB" } },
-            new() { Codigo = "COBRANZA_CLIENTE", Descripcion = "Cobranza de cliente", ConceptosSugeridos = new() { "CAJA", "BANCO", "CHEQUES_TERCEROS", "RETENCION_GANANCIAS_SUFRIDA", "RETENCION_IIBB_SUFRIDA", "CLIENTES" } },
+            new() { Codigo = "FACTURA_VENTA", Descripcion = "Factura de venta", ConceptosSugeridos = new() { "CLIENTES", "VENTA_NETA", "VENTA_NO_GRAVADA", "VENTA_EXENTA", "DEVOLUCION_CHEQUES", "IVA_DEBITO", "PERCEPCION_IIBB" } },
+            new() { Codigo = "COBRANZA_CLIENTE", Descripcion = "Cobranza de cliente", ConceptosSugeridos = new() { "CAJA", "BANCO", "CHEQUES_TERCEROS", "RETENCION_GANANCIAS_SUFRIDA", "RETENCION_IIBB_SUFRIDA", "RETENCION_SUSS_SUFRIDA", "RETENCION_IVA_SUFRIDA", "CLIENTES" } },
             new() { Codigo = "RETENCION_CLIENTE", Descripcion = "Retencion de cliente", ConceptosSugeridos = new() { "RETENCIONES", "CLIENTES" } },
             new() { Codigo = "RECHAZO_CHEQUE_CLIENTE", Descripcion = "Rechazo de cheque de tercero", ConceptosSugeridos = new() { "CLIENTES", "CHEQUES_TERCEROS" } },
             new() { Codigo = "ACREDITACION_CHEQUE", Descripcion = "Acreditacion de cheque de tercero", ConceptosSugeridos = new() { "BANCO", "CHEQUES_TERCEROS" } },
@@ -84,7 +84,7 @@ namespace BudgetControl.Api.Services.Accounting
             var codigo = NormalizeCodigo(request.CodigoOperacion);
             var descripcion = NormalizeRequired(request.Descripcion, "La descripcion es obligatoria.");
             await EnsureCodigoDisponibleAsync(codigo);
-            var detalles = await NormalizeAndValidateDetallesAsync(request.Detalles);
+            var detalles = await NormalizeAndValidateDetallesAsync(codigo, request.Detalles);
 
             var configuracion = new ConfiguracionContable
             {
@@ -128,7 +128,7 @@ namespace BudgetControl.Api.Services.Accounting
                 configuracion.CodigoOperacion = codigo;
             }
 
-            var detalles = await NormalizeAndValidateDetallesAsync(request.Detalles);
+            var detalles = await NormalizeAndValidateDetallesAsync(codigo, request.Detalles);
             configuracion.Descripcion = descripcion;
             configuracion.Activa = request.Activa;
 
@@ -172,7 +172,7 @@ namespace BudgetControl.Api.Services.Accounting
             }
         }
 
-        private async Task<List<UpsertConfiguracionContableDetalleRequest>> NormalizeAndValidateDetallesAsync(IReadOnlyCollection<UpsertConfiguracionContableDetalleRequest> detalles)
+        private async Task<List<UpsertConfiguracionContableDetalleRequest>> NormalizeAndValidateDetallesAsync(string codigo, IReadOnlyCollection<UpsertConfiguracionContableDetalleRequest> detalles)
         {
             if (detalles.Count < 2)
             {
@@ -185,7 +185,7 @@ namespace BudgetControl.Api.Services.Accounting
                 Concepto = NormalizeConcepto(detalle.Concepto),
                 CuentaContableId = detalle.CuentaContableId,
                 Orden = detalle.Orden > 0 ? detalle.Orden : index + 1,
-                EsObligatorio = detalle.EsObligatorio
+                EsObligatorio = detalle.EsObligatorio && !EsRubroOpcional(codigo, NormalizeConcepto(detalle.Concepto))
             }).ToList();
 
             if (!normalized.Any(d => d.TipoMovimiento == "Debe"))
@@ -253,6 +253,9 @@ namespace BudgetControl.Api.Services.Accounting
                     .ThenInclude(d => d.CuentaContable);
         }
 
+        private static bool EsRubroOpcional(string operacion, string concepto) =>
+            operacion == "FACTURA_VENTA" && concepto is "DEVOLUCION_CHEQUES" or "VENTA_NO_GRAVADA" or "VENTA_EXENTA" or "PERCEPCION_IIBB";
+
         private static ConfiguracionContableListResponse MapList(ConfiguracionContable configuracion)
         {
             return new ConfiguracionContableListResponse
@@ -290,7 +293,7 @@ namespace BudgetControl.Api.Services.Accounting
                         CuentaCodigo = d.CuentaContable.Codigo,
                         CuentaNombre = d.CuentaContable.Nombre,
                         Orden = d.Orden,
-                        EsObligatorio = d.EsObligatorio,
+                        EsObligatorio = d.EsObligatorio && !EsRubroOpcional(configuracion.CodigoOperacion, d.Concepto),
                         Activo = d.Activo
                     })
                     .ToList()

@@ -318,11 +318,11 @@ namespace BudgetControl.Api.Controllers.Sales
         }
 
         [HttpPost("{id}/percepciones-iibb/calcular")]
-        public async Task<IActionResult> CalcularVentaPercepcionIibb(int id)
+        public async Task<IActionResult> CalcularVentaPercepcionIibb(int id, [FromQuery] int? regimenId)
         {
             try
             {
-                var result = await _percepcionIibbService.CalcularAsync(id);
+                var result = await _percepcionIibbService.CalcularAsync(id, regimenId);
                 result.Venta = await _service.GetVentaAsync(id);
                 return Ok(result);
             }
@@ -469,6 +469,24 @@ namespace BudgetControl.Api.Controllers.Sales
         {
             var venta = await _service.GetVentaAsync(id);
             return venta == null ? NotFound() : Ok(venta);
+        }
+
+        [HttpGet("libro-iva")]
+        public async Task<IActionResult> Libro(DateTime desde, DateTime hasta)
+        {
+            try { return Ok(await _service.LibroAsync(desde,hasta)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        [HttpGet("obligaciones-disponibles")]
+        public async Task<IActionResult> Disponibles(string cliente, string obra, string moneda) =>
+            Ok(await _service.DisponiblesAsync(new BudgetControl.Api.Models.Sales.Venta { ClienteExternoId = cliente, ObraExternaId = obra, MonedaCodigo = moneda }));
+
+        [HttpPost("registro-simple")]
+        public async Task<IActionResult> RegistrarSimple(FacturaSimpleRequest request)
+        {
+            try { var venta = await _service.RegistrarSimpleAsync(request); return CreatedAtAction(nameof(GetVenta), new {id = venta.Id}, venta); }
+            catch (InvalidOperationException ex) { return BadRequest(new {error = ex.Message}); }
         }
 
         [HttpPost]

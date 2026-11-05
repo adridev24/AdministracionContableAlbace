@@ -19,6 +19,7 @@ const cobranzasService = {
   getCobranzas: (filters = {}) => apiClient.get(`/api/cobranzas${buildQuery(filters)}`).then((res) => res.data),
   getCobranza: (id) => apiClient.get(`/api/cobranzas/${id}`).then((res) => res.data),
   createCobranza: (payload) => apiClient.post('/api/cobranzas', payload).then((res) => res.data),
+  eliminarBorrador: (id) => apiClient.delete('/api/cobranzas/' + id),
   updateCobranza: (id, payload) => apiClient.put(`/api/cobranzas/${id}`, payload).then((res) => res.data),
   getFacturasDisponibles: (id) => apiClient.get(`/api/cobranzas/${id}/facturas-disponibles`).then((res) => res.data),
   getAplicaciones: (id) => apiClient.get(`/api/cobranzas/${id}/aplicaciones`).then((res) => res.data),

@@ -437,7 +437,7 @@ namespace BudgetControl.Api.Services.Sales
 
         private static string BuildComprobante(Venta venta)
         {
-            return $"{venta.TipoComprobante?.Codigo ?? "Factura"} {venta.PuntoVenta:0000}-{venta.NumeroComprobante:00000000}";
+            return $"{venta.TipoComprobante?.Codigo ?? "Factura"} {venta.PuntoVenta:00000}-{venta.NumeroComprobante:00000000}";
         }
 
         private static string NormalizeRequiredId(string value, string errorMessage)

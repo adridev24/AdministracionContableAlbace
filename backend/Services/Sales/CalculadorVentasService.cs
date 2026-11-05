@@ -28,6 +28,19 @@ namespace BudgetControl.Api.Services.Sales
             var detalles = venta.Detalles ?? new List<VentaDetalle>();
             var percepciones = venta.PercepcionesIibb ?? new List<VentaPercepcionIibb>();
 
+            if (venta.FiscalSimpleJson != null)
+            {
+                var fiscal = System.Text.Json.JsonSerializer.Deserialize<BudgetControl.Api.DTOs.Sales.FiscalRegistrado>(venta.FiscalSimpleJson)!;
+                venta.NetoGravado = fiscal.Lineas.Sum(x => x.Neto);
+                venta.TotalIva = fiscal.Lineas.Sum(x => x.Iva);
+                venta.TotalNoGravado = fiscal.NoGravado + fiscal.DevolucionCheques;
+                venta.TotalExento = fiscal.Exento;
+                venta.SubtotalBruto = venta.NetoGravado + venta.TotalNoGravado + venta.TotalExento;
+                venta.TotalAntesPercepciones = venta.SubtotalBruto + venta.TotalIva;
+                venta.TotalPercepciones = percepciones.Where(p => p.Activa).Sum(p => p.Importe);
+                venta.Total = venta.TotalAntesPercepciones + venta.TotalPercepciones;
+                return;
+            }
             venta.SubtotalBruto = RoundMoney(detalles.Sum(d => d.ImporteBruto));
             venta.TotalDescuentos = RoundMoney(detalles.Sum(d => d.ImporteDescuento));
             venta.NetoGravado = RoundMoney(detalles.Where(d => d.TipoTratamientoIva == TipoTratamientoIvaVenta.Gravado).Sum(d => d.Neto));

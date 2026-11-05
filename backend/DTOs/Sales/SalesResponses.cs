@@ -65,6 +65,7 @@ namespace BudgetControl.Api.DTOs.Sales
 
     public class VentaResponse
     {
+        public FiscalRegistrado? FiscalSimple { get; set; }
         public int Id { get; set; }
         public int TipoComprobanteVentaId { get; set; }
         public int? PuntoVentaComprobanteId { get; set; }
@@ -150,6 +151,7 @@ namespace BudgetControl.Api.DTOs.Sales
 
     public class VentaVinculacionPlanResponse
     {
+        public string MonedaCodigo { get; set; } = string.Empty;
         public int VinculacionId { get; set; }
         public int ObligacionId { get; set; }
         public string Tipo { get; set; } = string.Empty;

@@ -23,6 +23,7 @@ namespace BudgetControl.Api.Models.Sales
         public string MonedaCodigo { get; set; } = "ARS";
 
         public decimal Cotizacion { get; set; } = 1;
+        public string? FiscalSimpleJson { get; set; }
         public decimal SubtotalBruto { get; set; }
         public decimal TotalDescuentos { get; set; }
         public decimal NetoGravado { get; set; }
