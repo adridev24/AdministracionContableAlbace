@@ -56,3 +56,8 @@ export function hasAnyRole(allowedRoles = []) {
   const userRoles = getUserRoles();
   return allowedRoles.some((r) => userRoles.includes(r));
 }
+
+export function hasActiveSession() {
+  const payload = parseJwt(localStorage.getItem('token'));
+  return Boolean(payload && typeof payload.exp === 'number' && payload.exp * 1000 > Date.now());
+}

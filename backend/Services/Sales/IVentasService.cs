@@ -45,6 +45,9 @@ namespace BudgetControl.Api.Services.Sales
         Task<VentaResponse> CreateVentaAsync(VentaHeaderRequest request);
         Task<VentaResponse> RegistrarSimpleAsync(FacturaSimpleRequest request);
         Task<IEnumerable<VentaObligacionVia1DisponibleResponse>> DisponiblesAsync(BudgetControl.Api.Models.Sales.Venta venta);
+        Task<IEnumerable<AcuerdoAbiertoFacturaResponse>> GetAcuerdosAbiertosVia1Async(string cliente, string obra, string moneda, int ventaActual = 0);
+        Task<List<FacturaHitoResponse>> GetVinculacionesHitosAsync(int ventaId);
+        Task<List<FacturaHitoResponse>> UpdateVinculacionesHitosAsync(int ventaId, List<FacturaHitoRequest> request);
         Task<object> LibroAsync(DateTime desde, DateTime hasta);
         Task<VentaResponse> UpdateVentaAsync(int id, VentaHeaderRequest request);
         Task<IEnumerable<VentaDetalleResponse>> GetDetallesAsync(int ventaId);

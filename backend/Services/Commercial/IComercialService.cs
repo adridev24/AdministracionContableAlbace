@@ -26,6 +26,8 @@ namespace BudgetControl.Api.Services.Commercial
         Task<CuotaResponse> AjustarCuotaAsync(int cuotaId, AjusteCuotaRequest request);
         Task<CuotaResponse> AgregarCuotaAjusteAsync(int planPagoId, AddCuotaAjusteRequest request);
         Task<HitoComercialResponse> CrearHitoAsync(int acuerdoViaId, CreateHitoComercialRequest request);
+        Task<HitoComercialResponse> ActualizarHitoAsync(int acuerdoViaId, int hitoId, CreateHitoComercialRequest request);
+        Task EliminarHitoAsync(int acuerdoViaId, int hitoId);
         Task<IEnumerable<HitoComercialResponse>> GetHitosPorViaAsync(int acuerdoViaId);
         Task<IEnumerable<AjusteCuotaResponse>> GetHistorialAjustesPorCuotaAsync(int cuotaId);
         Task<IEnumerable<AjusteCuotaResponse>> GetHistorialAjustesPorAcuerdoAsync(int acuerdoId);

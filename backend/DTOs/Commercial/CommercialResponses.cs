@@ -198,6 +198,11 @@ namespace BudgetControl.Api.DTOs.Commercial
 
     public class HitoComercialResponse
     {
+        public decimal ImporteFacturado { get; set; }
+        public decimal ImporteReservado { get; set; }
+        public decimal SaldoFacturable { get; set; }
+        public bool TieneFacturasAsociadas { get; set; }
+        public bool TienePagosAsociados { get; set; }
         public int Id { get; set; }
         public int AcuerdoComercialViaId { get; set; }
         public string Descripcion { get; set; } = null!;

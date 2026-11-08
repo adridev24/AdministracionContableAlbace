@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 
-if (args.Length != 1) throw new ArgumentException("Pass appsettings.json to locate LOCAL PostgreSQL. Only a newly created disposable database is modified.");
+if (args.Length < 1 || args.Length > 2 || (args.Length == 2 && args[1] != "--hitos")) throw new ArgumentException("Pass appsettings.json to locate LOCAL PostgreSQL. Only a newly created disposable database is modified.");
 using var config = JsonDocument.Parse(await File.ReadAllTextAsync(args[0]));
 var builder = new NpgsqlConnectionStringBuilder(config.RootElement.GetProperty("ConnectionStrings").GetProperty("DefaultConnection").GetString());
 if (builder.Host is not ("localhost" or "127.0.0.1" or "::1"))
@@ -45,7 +45,11 @@ try
     var fiscalTarget = initializer.Initialize(fiscalMigration.TargetModel, designTime: true);
     var retencionesMigration = new RetencionesSussIvaCobranza();
     var retencionesTarget = initializer.Initialize(retencionesMigration.TargetModel, designTime: true);
-    Check(!differ.HasDifferences(retencionesTarget.GetRelationalModel(), current.GetRelationalModel()), "latest migration matches current EF model");
+    var hitoMigration = new HitoEliminarRestrict();
+    var hitoTarget = initializer.Initialize(hitoMigration.TargetModel, designTime: true);
+    var facturaHitoMigration = new FacturasHitosVia1();
+    var facturaHitoTarget = initializer.Initialize(facturaHitoMigration.TargetModel, designTime: true);
+    Check(!differ.HasDifferences(facturaHitoTarget.GetRelationalModel(), current.GetRelationalModel()), "latest migration matches current EF model");
     var snapshot = initializer.Initialize(db.GetService<IMigrationsAssembly>().ModelSnapshot!.Model, designTime: true);
     Check(!differ.HasDifferences(snapshot.GetRelationalModel(), current.GetRelationalModel()), "snapshot matches current EF model");
     foreach (var type in new[] { typeof(AcuerdoComercialVia), typeof(PlanPago), typeof(CuotaComercial) })
@@ -83,6 +87,8 @@ try
     }
     foreach (var command in sqlGenerator.Generate(fiscalMigration.UpOperations, fiscalTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
     foreach (var command in sqlGenerator.Generate(retencionesMigration.UpOperations, retencionesTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
+    foreach (var command in sqlGenerator.Generate(hitoMigration.UpOperations, hitoTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
+    foreach (var command in sqlGenerator.Generate(facturaHitoMigration.UpOperations, facturaHitoTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
     Check(await db.MediosPagoCobranza.CountAsync(m => m.Activo && (m.Codigo == "RETENCION_SUSS" || m.Codigo == "RETENCION_IVA")) == 2, "SUSS and IVA withholding methods available after migration");
     var fiscal = new BudgetControl.Api.DTOs.Sales.FiscalRegistrado(new() { new(1,100,21,21), new(2,200,10.5m,21) },10,5,20);
     var invoice = new BudgetControl.Api.Models.Sales.Venta { FiscalSimpleJson = System.Text.Json.JsonSerializer.Serialize(fiscal) };
@@ -97,11 +103,18 @@ try
         return Convert.ToInt64(await command.ExecuteScalarAsync());
     }
     Check(await Scalar($"SELECT count(*) FROM cuotas_comerciales_dependencias_historicas WHERE cuota_comercial_id={historicalId}") == 1, "upgrade backfills cancelled payment dependency");
+    if (args.Length == 1)
+    {
     await RevisionTests.RunAsync(NewContext, connection, Check);
     await ConcurrencyTests.RunAsync(NewContext, connectionString, Check);
     await RevisionOperationTests.RunAsync(NewContext, connectionString, Check);
     await PagoPlanificadoTests.RunAsync(NewContext, Check);
+    await HitoTests.RunAsync(NewContext, Check);
+    await MontoAbiertoTests.RunAsync(NewContext, Check);
+    await AcuerdosAbiertosFacturaTests.RunAsync(NewContext, Check);
+    }
     await FacturaSimpleTests.Run(NewContext, Check);
+    await FacturaHitosTests.RunAsync(NewContext, Check);
 
     // DDL rollback proves no partially installed schema; data below are disposable fixtures only.
     await using (var tx = await db.Database.BeginTransactionAsync())

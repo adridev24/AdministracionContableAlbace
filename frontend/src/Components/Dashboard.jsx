@@ -40,12 +40,13 @@ const modules = [
   },
 ];
 
-const Dashboard = () => {
+const Dashboard = ({ onLogout }) => {
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    onLogout?.();
     navigate('/login');
   };
 

@@ -1,3 +1,5 @@
+import useAcuerdosAbiertosVia1 from '../hooks/useAcuerdosAbiertosVia1';
+import VentaHitosFactura from '../components/VentaHitosFactura';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -18,6 +20,8 @@ const formatMoney = (value) => Number(value || 0).toLocaleString('es-AR', { mini
 const VentaDetallePage = () => {
   const { ventaId } = useParams();
   const [venta, setVenta] = useState(null);
+  const [tieneHitosImputados, setTieneHitosImputados] = useState(false);
+  const abiertos = useAcuerdosAbiertosVia1(venta?.clienteExternoId, venta?.obraExternaId, venta?.monedaCodigo);
   const [alicuotas, setAlicuotas] = useState([]);
   const [nomencladores, setNomencladores] = useState([]);
   const [itemsFacturables, setItemsFacturables] = useState([]);
@@ -142,6 +146,7 @@ const VentaDetallePage = () => {
   };
 
   const handleConfirmarFactura = async () => {
+    if (abiertos.bloqueado) { setError(abiertos.mensaje); return; }
     const validacion = await handleValidarConfirmacion();
     if (!validacion?.esValida) return;
 
@@ -193,7 +198,7 @@ const VentaDetallePage = () => {
           <Link className="btn-secondary" to="/ventas">Ventas</Link>
           <button className="btn-secondary" type="button" onClick={loadData} disabled={loading || saving}>Actualizar</button>
           {venta && !isConfirmed && (
-            <button className="btn-primary" type="button" onClick={handleConfirmarFactura} disabled={saving || confirming || calculatingPercepcion}>
+            <button className="btn-primary" type="button" onClick={handleConfirmarFactura} disabled={saving || confirming || calculatingPercepcion || abiertos.bloqueado}>
               {confirming ? 'Confirmando...' : 'Confirmar factura'}
             </button>
           )}
@@ -292,12 +297,13 @@ const VentaDetallePage = () => {
             </SectionCard>
           )}
 
-          <VentaAplicacionesPlanVia1
+          <VentaHitosFactura venta={venta} readOnly={isConfirmed} onSaved={loadData} onImputacionChange={setTieneHitosImputados} />
+          {!tieneHitosImputados && <VentaAplicacionesPlanVia1
             venta={venta}
             readOnly={isConfirmed}
             disabled={saving || confirming || calculatingPercepcion}
             onSaved={loadData}
-          />
+          />}
 
           {venta.fiscalSimple ? <SectionCard title="Importes registrados">
             {venta.fiscalSimple.cotizacionDolarReferencia != null && <p>Dólar de referencia al facturar: ARS {venta.fiscalSimple.cotizacionDolarReferencia.toLocaleString('es-AR',{maximumFractionDigits:6})} por USD.</p>}

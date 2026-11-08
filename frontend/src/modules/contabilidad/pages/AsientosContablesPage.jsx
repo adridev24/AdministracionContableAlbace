@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatCalendarDate } from '../../../shared/utils/calendarDate';
 import { Link } from 'react-router-dom';
 import SectionCard from '../../../shared/components/SectionCard';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -14,7 +15,7 @@ const getApiError = (error) => {
 };
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const formatDate = (value) => (value ? new Date(value).toLocaleDateString('es-AR') : '');
+const formatDate = formatCalendarDate;
 
 const AsientosContablesPage = () => {
   const [asientos, setAsientos] = useState([]);

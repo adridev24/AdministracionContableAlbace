@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatCalendarDate } from '../../../shared/utils/calendarDate';
 import { Link, useParams } from 'react-router-dom';
 import SectionCard from '../../../shared/components/SectionCard';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -82,7 +83,7 @@ const AsientoDetallePage = () => {
         <>
           <SectionCard title="Encabezado">
             <div className="detail-grid">
-              <div><span>Fecha</span><strong>{formatDate(asiento.fecha)}</strong></div>
+              <div><span>Fecha</span><strong>{formatCalendarDate(asiento.fecha)}</strong></div>
               <div><span>Descripcion</span><strong>{asiento.descripcion}</strong></div>
               <div><span>Tipo</span><strong>{asiento.tipo}</strong></div>
               <div><span>Origen</span><strong>{asiento.moduloOrigen || 'Manual'}</strong></div>

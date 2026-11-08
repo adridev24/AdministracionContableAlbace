@@ -13,6 +13,7 @@ namespace BudgetControl.Api.Data
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
+        public DbSet<VinculacionFacturaHito> VinculacionesFacturasHitos { get; set; } = null!;
         public DbSet<User> Users { get; set; } = null!;
         public DbSet<RevisionPlanPago> RevisionesPlanesPago { get; set; } = null!;
         public DbSet<RevisionPlanPagoDetalle> RevisionesPlanesPagoDetalles { get; set; } = null!;
@@ -62,6 +63,14 @@ namespace BudgetControl.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<VinculacionFacturaHito>(e =>
+            {
+                e.ToTable("vinculaciones_facturas_hitos", t => t.HasCheckConstraint("CK_factura_hito_importe", "\"Importe\" > 0"));
+                e.HasIndex(x => new { x.VentaId, x.HitoId }).IsUnique();
+                e.Property(x => x.Importe).HasPrecision(18, 2);
+                e.HasOne(x => x.Venta).WithMany().HasForeignKey(x => x.VentaId).OnDelete(DeleteBehavior.Cascade);
+                e.HasOne(x => x.Hito).WithMany().HasForeignKey(x => x.HitoId).OnDelete(DeleteBehavior.Restrict);
+            });
             modelBuilder.Entity<User>(entity =>
             {
                 entity.ToTable("users");
@@ -261,7 +270,7 @@ namespace BudgetControl.Api.Data
                 entity.HasOne(e => e.HitoComercialVia)
                     .WithMany(h => h.Aplicaciones)
                     .HasForeignKey(e => e.HitoComercialViaId)
-                    .OnDelete(DeleteBehavior.SetNull);
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<HitoComercialVia>(entity =>

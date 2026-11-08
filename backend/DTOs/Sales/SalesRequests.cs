@@ -14,6 +14,7 @@ namespace BudgetControl.Api.DTOs.Sales
         public decimal NoGravado { get; set; }
         public decimal Exento { get; set; }
         public decimal DevolucionCheques { get; set; }
+        public List<FacturaHitoRequest> AplicacionesHitos { get; set; } = new();
         public List<VentaVinculacionPlanRequest> Aplicaciones { get; set; } = new();
     }
     public class VentaHeaderRequest

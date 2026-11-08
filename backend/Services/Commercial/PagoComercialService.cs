@@ -26,6 +26,7 @@ namespace BudgetControl.Api.Services.Commercial
             }
 
             var via = await _db.AcuerdosComercialesVias
+                .FromSqlInterpolated($"SELECT v.*, v.xmin FROM acuerdos_comerciales_vias v WHERE id = {request.AcuerdoComercialViaId} FOR UPDATE")
                 .Include(v => v.AcuerdoComercial)
                 .Include(v => v.Pagos)
                 .FirstOrDefaultAsync(v => v.Id == request.AcuerdoComercialViaId);
@@ -102,7 +103,9 @@ namespace BudgetControl.Api.Services.Commercial
 
         public async Task<PagoComercialResponse> AplicarPagoAsync(int pagoId, AplicarPagoRequest request)
         {
+            await using var transaction = await _db.Database.BeginTransactionAsync();
             var pago = await _db.PagosComerciales
+                .FromSqlInterpolated($"SELECT * FROM pagos_comerciales WHERE id = {pagoId} FOR UPDATE")
                 .Include(p => p.AcuerdoComercialVia)
                 .Include(p => p.Aplicaciones)
                 .FirstOrDefaultAsync(p => p.Id == pagoId);
@@ -122,7 +125,9 @@ namespace BudgetControl.Api.Services.Commercial
                 throw new InvalidOperationException("Debe incluir al menos una aplicacion de pago.");
             }
 
-            return MapPago(await AplicarPagoInternoAsync(pago, request.Aplicaciones));
+            var result = MapPago(await AplicarPagoInternoAsync(pago, request.Aplicaciones));
+            await transaction.CommitAsync();
+            return result;
         }
 
         public async Task<PagoComercialResponse?> GetPagoAsync(int pagoId)
@@ -140,6 +145,10 @@ namespace BudgetControl.Api.Services.Commercial
                 throw new InvalidOperationException("Debe indicar un motivo de anulacion.");
             }
 
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await _db.PagosComerciales.FromSqlInterpolated($"SELECT * FROM pagos_comerciales WHERE id = {pagoId} FOR UPDATE").LoadAsync();
+            // Acquire locks before loading payment hitos to avoid stale totals.
+            await _db.HitosComercialesVias.FromSqlInterpolated($"SELECT * FROM hitos_comerciales_vias WHERE id IN (SELECT hito_comercial_via_id FROM aplicaciones_pago_comerciales WHERE pago_comercial_id = {pagoId}) ORDER BY id FOR UPDATE").ToListAsync();
             var pago = await GetPagoQuery()
                 .FirstOrDefaultAsync(p => p.Id == pagoId);
 
@@ -157,8 +166,6 @@ namespace BudgetControl.Api.Services.Commercial
             {
                 throw new InvalidOperationException("El pago ya se encuentra anulado.");
             }
-
-            await using var transaction = await _db.Database.BeginTransactionAsync();
 
             foreach (var aplicacion in pago.Aplicaciones)
             {
@@ -251,7 +258,7 @@ namespace BudgetControl.Api.Services.Commercial
                 .Distinct()
                 .ToList();
             var hitos = await _db.HitosComercialesVias
-                .Where(h => hitoIds.Contains(h.Id))
+                .FromSqlInterpolated($"SELECT * FROM hitos_comerciales_vias WHERE id = ANY ({hitoIds.ToArray()}) ORDER BY id FOR UPDATE")
                 .ToListAsync();
 
             if (hitos.Count != hitoIds.Count)

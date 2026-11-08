@@ -58,7 +58,10 @@ namespace BudgetControl.Api.Services.Commercial
             var acuerdo = await GetAcuerdoQuery()
                 .FirstOrDefaultAsync(a => a.Id == id);
 
-            return acuerdo == null ? null : MapDetalle(acuerdo);
+            if (acuerdo == null) return null;
+            var response = MapDetalle(acuerdo);
+            foreach (var via in response.Vias) await EnriquecerHitosVia1Async(via);
+            return response;
         }
 
         public async Task<AcuerdoResponse> AprobarAcuerdoAsync(int acuerdoId)
@@ -105,7 +108,9 @@ namespace BudgetControl.Api.Services.Commercial
                 .OrderByDescending(a => a.FechaAlta)
                 .ToListAsync();
 
-            return acuerdos.Select(MapAcuerdo).ToList();
+            var responses = acuerdos.Select(MapAcuerdo).ToList();
+            foreach (var response in responses) foreach (var via in response.Vias) await EnriquecerHitosVia1Async(via);
+            return responses;
         }
 
         public async Task<IEnumerable<AcuerdoResponse>> GetAcuerdosPorObraAsync(string obraExternaId)
@@ -115,7 +120,9 @@ namespace BudgetControl.Api.Services.Commercial
                 .OrderByDescending(a => a.FechaAlta)
                 .ToListAsync();
 
-            return acuerdos.Select(MapAcuerdo).ToList();
+            var responses = acuerdos.Select(MapAcuerdo).ToList();
+            foreach (var response in responses) foreach (var via in response.Vias) await EnriquecerHitosVia1Async(via);
+            return responses;
         }
 
         public async Task<AcuerdoViaResponse> CrearViaAsync(int acuerdoId, CreateAcuerdoViaRequest request)
@@ -139,11 +146,25 @@ namespace BudgetControl.Api.Services.Commercial
             await RecalculateAcuerdoMontoTotalAsync(acuerdo);
             await _db.SaveChangesAsync();
 
-            return MapVia(via);
+            var response = MapVia(via);
+            await EnriquecerHitosVia1Async(response);
+            return response;
         }
 
         public async Task<AcuerdoViaResponse> ModificarMontoViaAsync(int acuerdoViaId, ModificarMontoViaRequest request)
         {
+            if (request.NuevoMonto <= 0 || decimal.Round(request.NuevoMonto, 2) != request.NuevoMonto)
+                throw new InvalidOperationException("El nuevo monto debe ser positivo y tener como maximo dos decimales.");
+            if (string.IsNullOrWhiteSpace(request.Motivo))
+                throw new InvalidOperationException("Debe indicar un motivo para modificar el monto.");
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            var acuerdoId = await _db.AcuerdosComercialesVias.Where(v => v.Id == acuerdoViaId)
+                .Select(v => (int?)v.AcuerdoComercialId).SingleOrDefaultAsync()
+                ?? throw new InvalidOperationException("Via comercial no encontrada.");
+            await _db.AcuerdosComerciales.FromSqlInterpolated(
+                $"SELECT * FROM acuerdos_comerciales WHERE id = {acuerdoId} FOR UPDATE").LoadAsync();
+            await _db.AcuerdosComercialesVias.FromSqlInterpolated(
+                $"SELECT v.*, v.xmin FROM acuerdos_comerciales_vias v WHERE id = {acuerdoViaId} FOR UPDATE").LoadAsync();
             var via = await GetViaQuery()
                 .FirstOrDefaultAsync(v => v.Id == acuerdoViaId);
 
@@ -152,17 +173,45 @@ namespace BudgetControl.Api.Services.Commercial
                 throw new InvalidOperationException("Vía comercial no encontrada.");
             }
 
-            if (via.Estado != AcuerdoEstado.Borrador || via.AcuerdoComercial.Estado != AcuerdoEstado.Borrador)
+            var abierta = via.ModalidadCobro == ModalidadCobro.Abierta;
+            var borrador = via.Estado == AcuerdoEstado.Borrador && via.AcuerdoComercial.Estado == AcuerdoEstado.Borrador;
+            var abiertaVigente = abierta &&
+                (via.Estado == AcuerdoEstado.Aprobado || via.Estado == AcuerdoEstado.EnCurso) &&
+                (via.AcuerdoComercial.Estado == AcuerdoEstado.Aprobado || via.AcuerdoComercial.Estado == AcuerdoEstado.EnCurso);
+            if (!borrador && !abiertaVigente)
             {
-                throw new InvalidOperationException("El monto de la via solo puede modificarse antes de aprobar el acuerdo.");
+                throw new InvalidOperationException("Solo se puede modificar el monto en borrador o en una via abierta aprobada o en curso.");
             }
 
-            var totalPagado = GetTotalPagadoVia(via);
+            var totalPagado = await GetTotalPagadoActualAsync(via);
             if (request.NuevoMonto < totalPagado)
             {
                 throw new InvalidOperationException("El nuevo monto de la vía no puede ser menor al total ya pagado.");
             }
 
+            if (abierta)
+            {
+                if (request.RefinanciarCuotasPendientes)
+                    throw new InvalidOperationException("Una via abierta no permite refinanciar cuotas.");
+                if (via.ViaOperacion == ViaOperacion.Via1)
+                {
+                    var balances = await SaldosHitosVia1.ObtenerAsync(_db, via.Hitos.Select(h => h.Id));
+                    if (request.NuevoMonto < balances.Values.Sum(b => b.Facturado + b.Reservado))
+                        throw new InvalidOperationException("El monto no puede ser menor al total facturado y reservado en los hitos.");
+                }
+                var saldoNuevo = request.NuevoMonto - totalPagado;
+                var hitoExcedido = via.Hitos.FirstOrDefault(h => h.ImporteEstimado > saldoNuevo);
+                if (hitoExcedido != null)
+                    throw new InvalidOperationException($"El saldo resultante ({saldoNuevo:N2}) no puede ser menor al importe del hito '{hitoExcedido.Descripcion}' ({hitoExcedido.ImporteEstimado:N2}). Ajuste primero el hito respetando sus pagos asignados.");
+                var aplicadoHitos = await _db.AplicacionesPagoComerciales
+                    .Where(x => x.HitoComercialVia != null && x.HitoComercialVia.AcuerdoComercialViaId == acuerdoViaId && x.PagoComercial.Estado != PagoEstado.Anulado)
+                    .SumAsync(x => x.ImporteAplicado);
+                if (request.NuevoMonto < aplicadoHitos)
+                    throw new InvalidOperationException("El nuevo monto no puede ser menor al total pagado en los hitos.");
+            }
+            // Include every via when updating the agreement aggregate.
+            await _db.AcuerdosComercialesVias.Where(v => v.AcuerdoComercialId == acuerdoId)
+                .Include(v => v.PlanPago).ThenInclude(p => p!.Cuotas).LoadAsync();
             var montoAnterior = via.MontoActual;
             via.MontoActual = request.NuevoMonto;
 
@@ -176,7 +225,7 @@ namespace BudgetControl.Api.Services.Commercial
                 MontoNuevo = request.NuevoMonto,
                 Diferencia = request.NuevoMonto - montoAnterior,
                 TipoAjuste = request.RefinanciarCuotasPendientes ? TipoAjusteVia.RefinanciacionAutomatica : TipoAjusteVia.CambioMonto,
-                Motivo = request.Motivo,
+                Motivo = request.Motivo.Trim(),
                 FechaAjuste = DateTime.UtcNow,
                 UsuarioAjuste = _userContext.UserName
             });
@@ -189,8 +238,11 @@ namespace BudgetControl.Api.Services.Commercial
             ValidatePlanTotalMatchesVia(via);
             await RecalculateAcuerdoMontoTotalAsync(via.AcuerdoComercial);
             await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
 
-            return MapVia(via);
+            var response = MapVia(via);
+            await EnriquecerHitosVia1Async(response);
+            return response;
         }
 
         public async Task<PlanPagoResponse> CrearPlanPagoAsync(int acuerdoViaId, CreatePlanPagoRequest request)
@@ -337,7 +389,8 @@ namespace BudgetControl.Api.Services.Commercial
             }
 
             var totalPrometido = acuerdo.Vias.Where(IsViaActiva).Sum(GetMontoVigenteVia);
-            var totalPagado = acuerdo.Vias.Sum(GetTotalPagadoVia);
+            decimal totalPagado = 0;
+            foreach (var via in acuerdo.Vias) totalPagado += await GetTotalPagadoActualAsync(via);
             return new EstadoComercialResponse
             {
                 AcuerdoComercialId = acuerdo.Id,
@@ -357,7 +410,7 @@ namespace BudgetControl.Api.Services.Commercial
                 throw new InvalidOperationException("Vía comercial no encontrada.");
             }
 
-            var totalPagado = GetTotalPagadoVia(via);
+            var totalPagado = await GetTotalPagadoActualAsync(via);
             return new EstadoComercialResponse
             {
                 AcuerdoComercialId = via.AcuerdoComercialId,
@@ -534,7 +587,7 @@ namespace BudgetControl.Api.Services.Commercial
                 .Where(a => a.ClienteExternoId == clienteExternoId && a.Estado != AcuerdoEstado.Anulado)
                 .ToListAsync();
 
-            return MapSaldo(clienteExternoId, acuerdos);
+            return await MapSaldoAsync(clienteExternoId, acuerdos);
         }
 
         public async Task<SaldoComercialResponse> GetSaldoComercialObraAsync(string obraExternaId)
@@ -543,7 +596,7 @@ namespace BudgetControl.Api.Services.Commercial
                 .Where(a => a.ObraExternaId == obraExternaId && a.Estado != AcuerdoEstado.Anulado)
                 .ToListAsync();
 
-            return MapSaldo(obraExternaId, acuerdos);
+            return await MapSaldoAsync(obraExternaId, acuerdos);
         }
 
         public async Task<ReporteComercialResumenResponse> GetReporteComercialResumenAsync(DateTime? periodoDesde, DateTime? periodoHasta, ViaOperacion? viaOperacion = null)
@@ -871,7 +924,10 @@ namespace BudgetControl.Api.Services.Commercial
 
         public async Task<HitoComercialResponse> CrearHitoAsync(int acuerdoViaId, CreateHitoComercialRequest request)
         {
+            ValidarHito(request);
+            await using var transaction = await _db.Database.BeginTransactionAsync();
             var via = await _db.AcuerdosComercialesVias
+                .FromSqlInterpolated($"SELECT v.*, v.xmin FROM acuerdos_comerciales_vias v WHERE id = {acuerdoViaId} FOR UPDATE")
                 .Include(v => v.Hitos)
                 .FirstOrDefaultAsync(v => v.Id == acuerdoViaId);
 
@@ -884,6 +940,8 @@ namespace BudgetControl.Api.Services.Commercial
             {
                 throw new InvalidOperationException("Los hitos solo se registran en vias de modalidad abierta.");
             }
+
+            await ValidarSaldoHitoAsync(acuerdoViaId, request.ImporteEstimado);
 
             var hito = new HitoComercialVia
             {
@@ -900,17 +958,91 @@ namespace BudgetControl.Api.Services.Commercial
 
             via.Hitos.Add(hito);
             await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
             return MapHito(hito);
+        }
+
+        private async Task ValidarSaldoHitoAsync(int viaId, decimal importe, decimal aplicado = 0)
+        {
+            var via = await _db.AcuerdosComercialesVias
+                .Include(v => v.PlanPago).ThenInclude(p => p!.Cuotas)
+                .Include(v => v.Pagos).SingleAsync(v => v.Id == viaId);
+            var saldo = Math.Max(GetMontoVigenteVia(via) - await GetTotalPagadoActualAsync(via), 0);
+            if (aplicado > saldo)
+                throw new InvalidOperationException($"No se puede editar el hito: sus pagos asignados ({aplicado:N2}) superan el saldo actual del plan ({saldo:N2}).");
+            if (importe > saldo)
+                throw new InvalidOperationException($"El importe del hito no puede superar el saldo actual del plan ({saldo:N2}).");
+        }
+
+        private static void ValidarHito(CreateHitoComercialRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Descripcion))
+                throw new InvalidOperationException("Debe indicar una descripcion para el hito.");
+            if (request.ImporteEstimado < 0 || decimal.Round(request.ImporteEstimado, 2) != request.ImporteEstimado)
+                throw new InvalidOperationException("El importe debe ser no negativo y tener como maximo dos decimales.");
+            if (request.FechaReferencia == default)
+                throw new InvalidOperationException("Debe indicar la fecha de referencia.");
+        }
+
+        public async Task<HitoComercialResponse> ActualizarHitoAsync(int acuerdoViaId, int hitoId, CreateHitoComercialRequest request)
+        {
+            ValidarHito(request);
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await _db.AcuerdosComercialesVias
+                .FromSqlInterpolated($"SELECT v.*, v.xmin FROM acuerdos_comerciales_vias v WHERE id = {acuerdoViaId} FOR UPDATE").LoadAsync();
+            var hito = await _db.HitosComercialesVias
+                .FromSqlInterpolated($"SELECT * FROM hitos_comerciales_vias WHERE id = {hitoId} AND acuerdo_comercial_via_id = {acuerdoViaId} FOR UPDATE")
+                .SingleOrDefaultAsync() ?? throw new InvalidOperationException("Hito comercial no encontrado en la via indicada.");
+            var aplicado = await _db.AplicacionesPagoComerciales
+                .Where(a => a.HitoComercialViaId == hitoId && a.PagoComercial.Estado != PagoEstado.Anulado)
+                .SumAsync(a => a.ImporteAplicado);
+            var fiscal = (await SaldosHitosVia1.ObtenerAsync(_db, new[] { hitoId }))[hitoId];
+            if (request.ImporteEstimado < fiscal.Facturado + fiscal.Reservado)
+                throw new InvalidOperationException("El importe del hito no puede ser inferior al total facturado y reservado en facturas.");
+            aplicado = Math.Max(aplicado, fiscal.Cobrado);
+            await ValidarSaldoHitoAsync(acuerdoViaId, request.ImporteEstimado, aplicado);
+            if (request.ImporteEstimado < aplicado)
+                throw new InvalidOperationException($"El importe del hito no puede ser inferior al total de pagos asignados ({aplicado:N2}).");
+            hito.Descripcion = request.Descripcion.Trim();
+            hito.ImporteEstimado = request.ImporteEstimado;
+            hito.FechaReferencia = EnsureUtc(request.FechaReferencia);
+            hito.Observaciones = request.Observaciones;
+            hito.ImporteAplicado = aplicado;
+            hito.Estado = aplicado <= 0 ? HitoEstado.Pendiente
+                : aplicado >= hito.ImporteEstimado ? HitoEstado.Cumplido : HitoEstado.Parcial;
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            await _db.Entry(hito).Collection(h => h.Aplicaciones).LoadAsync();
+            return MapHito(hito);
+        }
+
+        public async Task EliminarHitoAsync(int acuerdoViaId, int hitoId)
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            var hito = await _db.HitosComercialesVias
+                .FromSqlInterpolated($"SELECT * FROM hitos_comerciales_vias WHERE id = {hitoId} AND acuerdo_comercial_via_id = {acuerdoViaId} FOR UPDATE")
+                .SingleOrDefaultAsync() ?? throw new InvalidOperationException("Hito comercial no encontrado en la via indicada.");
+            if (await _db.VinculacionesFacturasHitos.AnyAsync(a => a.HitoId == hitoId))
+                throw new InvalidOperationException("No se puede eliminar un hito asociado a una factura. Quite primero la imputacion si la factura es un borrador.");
+            if (await _db.AplicacionesPagoComerciales.AnyAsync(a => a.HitoComercialViaId == hitoId))
+                throw new InvalidOperationException("No se puede eliminar un hito con pagos asociados, incluso anulados.");
+            _db.HitosComercialesVias.Remove(hito);
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
         }
 
         public async Task<IEnumerable<HitoComercialResponse>> GetHitosPorViaAsync(int acuerdoViaId)
         {
             var hitos = await _db.HitosComercialesVias
+                .Include(h => h.Aplicaciones)
                 .Where(h => h.AcuerdoComercialViaId == acuerdoViaId)
                 .OrderBy(h => h.FechaReferencia)
                 .ToListAsync();
 
-            return hitos.Select(MapHito).ToList();
+            var response = hitos.Select(MapHito).ToList();
+            var via = await _db.AcuerdosComercialesVias.FindAsync(acuerdoViaId);
+            if (via?.ViaOperacion == ViaOperacion.Via1) await EnriquecerHitosAsync(response);
+            return response;
         }
 
         public async Task<IEnumerable<AjusteCuotaResponse>> GetHistorialAjustesPorCuotaAsync(int cuotaId)
@@ -954,6 +1086,7 @@ namespace BudgetControl.Api.Services.Commercial
                         .ThenInclude(p => p.Aplicaciones)
                 .Include(a => a.Vias)
                     .ThenInclude(v => v.Hitos)
+                        .ThenInclude(h => h.Aplicaciones)
                 .Include(a => a.Vias)
                     .ThenInclude(v => v.Ajustes)
                 .AsSplitQuery();
@@ -968,6 +1101,7 @@ namespace BudgetControl.Api.Services.Commercial
                 .Include(v => v.Pagos)
                     .ThenInclude(p => p.Aplicaciones)
                 .Include(v => v.Hitos)
+                    .ThenInclude(h => h.Aplicaciones)
                 .Include(v => v.Ajustes)
                 .AsSplitQuery();
         }
@@ -1318,6 +1452,34 @@ namespace BudgetControl.Api.Services.Commercial
             return via.Estado != AcuerdoEstado.Anulado && via.Estado != AcuerdoEstado.Finalizado;
         }
 
+        private async Task<decimal> GetTotalPagadoActualAsync(AcuerdoComercialVia via)
+        {
+            if (via.ViaOperacion != ViaOperacion.Via1 || via.ModalidadCobro != ModalidadCobro.Abierta) return GetTotalPagadoVia(via);
+            var ids = await _db.HitosComercialesVias.Where(h => h.AcuerdoComercialViaId == via.Id).Select(h => h.Id).ToListAsync();
+            return (await SaldosHitosVia1.ObtenerAsync(_db, ids)).Values.Sum(s => s.Cobrado);
+        }
+
+        private async Task EnriquecerHitosAsync(List<HitoComercialResponse> hitos)
+        {
+            var saldos = await SaldosHitosVia1.ObtenerAsync(_db, hitos.Select(h => h.Id));
+            foreach (var h in hitos)
+            {
+                var saldo = saldos[h.Id];
+                h.ImporteFacturado = saldo.Facturado; h.ImporteReservado = saldo.Reservado;
+                h.ImporteAplicado = saldo.Cobrado; h.TieneFacturasAsociadas = saldo.TieneFacturas;
+                h.SaldoFacturable = Math.Max(0, h.ImporteEstimado - saldo.Facturado - saldo.Reservado);
+                h.Estado = saldo.Cobrado <= 0 ? HitoEstado.Pendiente : saldo.Cobrado >= h.ImporteEstimado ? HitoEstado.Cumplido : HitoEstado.Parcial;
+            }
+        }
+
+        private async Task EnriquecerHitosVia1Async(AcuerdoViaResponse via)
+        {
+            if (via.ViaOperacion != ViaOperacion.Via1 || via.ModalidadCobro != ModalidadCobro.Abierta) return;
+            await EnriquecerHitosAsync(via.Hitos);
+            via.TotalPagado = via.Hitos.Sum(h => h.ImporteAplicado);
+            via.SaldoPendiente = Math.Max(0, via.MontoActual - via.TotalPagado);
+        }
+
         private static decimal GetTotalPagadoVia(AcuerdoComercialVia via)
         {
             return via.Pagos
@@ -1412,8 +1574,16 @@ namespace BudgetControl.Api.Services.Commercial
                 .Select(c => new { c.Id, c.PlanPago.AcuerdoComercialViaId }).ToListAsync();
             var cobranzas = await BudgetControl.Api.Services.Collections.SaldosCuotasCobranza.ObtenerAsync(
                 _db, cuotas.Select(c => c.Id), desde: desde, hasta: hasta);
-            return cuotas.GroupBy(c => c.AcuerdoComercialViaId)
+            var result = cuotas.GroupBy(c => c.AcuerdoComercialViaId)
                 .ToDictionary(g => g.Key, g => g.Sum(c => cobranzas.GetValueOrDefault(c.Id)));
+            var hitos = await _db.HitosComercialesVias.AsNoTracking().Where(h => ids.Contains(h.AcuerdoComercialViaId) &&
+                h.AcuerdoComercialVia.ViaOperacion == ViaOperacion.Via1 && h.AcuerdoComercialVia.ModalidadCobro == ModalidadCobro.Abierta)
+                .Select(h => new { h.Id, h.AcuerdoComercialViaId }).ToListAsync();
+            var saldoHasta = await SaldosHitosVia1.ObtenerAsync(_db, hitos.Select(h => h.Id), hasta: hasta);
+            var saldoAntes = desde.HasValue ? await SaldosHitosVia1.ObtenerAsync(_db, hitos.Select(h => h.Id), hasta: desde.Value.AddTicks(-1)) : new Dictionary<int, SaldoHitoVia1>();
+            foreach (var grupo in hitos.GroupBy(h => h.AcuerdoComercialViaId))
+                result[grupo.Key] = grupo.Sum(h => saldoHasta[h.Id].Cobrado - (saldoAntes.GetValueOrDefault(h.Id)?.Cobrado ?? 0));
+            return result;
         }
 
         private static decimal GetTotalCobradoReporteVia(AcuerdoComercialVia via, IReadOnlyDictionary<int, decimal> cobradoVia1PorVia)
@@ -1682,6 +1852,7 @@ namespace BudgetControl.Api.Services.Commercial
             return new HitoComercialResponse
             {
                 Id = hito.Id,
+                TienePagosAsociados = hito.Aplicaciones.Any(),
                 AcuerdoComercialViaId = hito.AcuerdoComercialViaId,
                 Descripcion = hito.Descripcion,
                 ImporteEstimado = hito.ImporteEstimado,
@@ -1694,11 +1865,12 @@ namespace BudgetControl.Api.Services.Commercial
             };
         }
 
-        private static SaldoComercialResponse MapSaldo(string externoId, IEnumerable<AcuerdoComercial> acuerdos)
+        private async Task<SaldoComercialResponse> MapSaldoAsync(string externoId, IEnumerable<AcuerdoComercial> acuerdos)
         {
             var vias = acuerdos.SelectMany(a => a.Vias).Where(IsViaActiva).ToList();
             var totalPrometido = vias.Sum(GetMontoVigenteVia);
-            var totalPagado = vias.Sum(GetTotalPagadoVia);
+            decimal totalPagado = 0;
+            foreach (var via in vias) totalPagado += await GetTotalPagadoActualAsync(via);
             return new SaldoComercialResponse
             {
                 ExternoId = externoId,

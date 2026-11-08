@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import SectionCard from '../../../shared/components/SectionCard';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import EstadoComercialResumen from '../components/EstadoComercialResumen';
@@ -12,6 +12,7 @@ import CuotasComercialesTable from '../components/CuotasComercialesTable';
 import AjusteCuotaModal from '../components/AjusteCuotaModal';
 import AgregarCuotaModal from '../components/AgregarCuotaModal';
 import SituacionVia1Panel from '../components/SituacionVia1Panel';
+import SituacionHitosPanel from '../components/SituacionHitosPanel';
 import PagoComercialForm from '../components/PagoComercialForm';
 import useAcuerdoDetalle from '../hooks/useAcuerdoDetalle';
 import usePagosComerciales from '../hooks/usePagosComerciales';
@@ -57,7 +58,8 @@ const getApiError = (error, fallback) => error?.response?.data?.error || fallbac
 const AcuerdoDetallePage = () => {
   const { id } = useParams();
   const { detalle, loading, error, setDetalle } = useAcuerdoDetalle(id);
-  const [selectedViaId, setSelectedViaId] = useState(null);
+  const [searchParams] = useSearchParams();
+  const [selectedViaId, setSelectedViaId] = useState(() => Number(searchParams.get('via')) || null);
   const [clienteNombre, setClienteNombre] = useState('');
   const [obraNombre, setObraNombre] = useState('');
   const [planLoading, setPlanLoading] = useState(false);
@@ -77,6 +79,7 @@ const AcuerdoDetallePage = () => {
   });
   const [montoLoading, setMontoLoading] = useState(false);
   const [hitoForm, setHitoForm] = useState({ descripcion: '', importeEstimado: '', fechaReferencia: '', observaciones: '' });
+  const [hitoEditando, setHitoEditando] = useState(null);
   const [hitoLoading, setHitoLoading] = useState(false);
   const [aprobarLoading, setAprobarLoading] = useState(false);
   const [pagoFormOpen, setPagoFormOpen] = useState(false);
@@ -98,6 +101,9 @@ const AcuerdoDetallePage = () => {
     : baseVia, [baseVia, revisionEstado]);
   const roles = getUserRoles();
   const canRevisar = canReviewPlan(roles, detalle, selectedVia);
+  const abiertaVigente = selectedVia?.modalidadCobro === 'Abierta' &&
+    ['Aprobado', 'EnCurso'].includes(selectedVia?.estado) && ['Aprobado', 'EnCurso'].includes(detalle?.estado);
+  const minimoMontoAbierto = Number(selectedVia?.totalPagado || 0) + Math.max(0, ...(selectedVia?.hitos || []).map(h => Number(h.importeEstimado || 0)));
   const isBorrador = detalle?.estado === 'Borrador' && selectedVia?.estado === 'Borrador';
   const canAgregarCuota = roles.includes('Admin') && selectedVia?.planPago && ['Aprobado', 'EnCurso'].includes(selectedVia?.estado);
   const viasPlanificadasSinPlan = vias.filter((via) => via.modalidadCobro === 'Planificada' && !via.planPago);
@@ -231,7 +237,7 @@ const AcuerdoDetallePage = () => {
     try {
       await acuerdosService.modificarMontoVia(selectedVia.id, {
         nuevoMonto: Number(montoForm.nuevoMonto),
-        refinanciarCuotasPendientes: montoForm.refinanciarCuotasPendientes,
+        refinanciarCuotasPendientes: selectedVia.modalidadCobro !== 'Abierta' && montoForm.refinanciarCuotasPendientes,
         motivo: montoForm.motivo,
       });
       await refreshDetalle();
@@ -244,33 +250,52 @@ const AcuerdoDetallePage = () => {
     }
   };
 
+  const cancelarEdicionHito = () => {
+    setHitoEditando(null);
+    setHitoForm({ descripcion: '', importeEstimado: '', fechaReferencia: '', observaciones: '' });
+  };
+
   const handleCrearHito = async (event) => {
     event.preventDefault();
-    if (!selectedVia) return;
-
+    if (!selectedVia || hitoLoading) return;
     setHitoLoading(true);
     setPlanError('');
     setSuccess('');
     try {
-      const nuevoHito = await acuerdosService.crearHitoVia(selectedVia.id, {
+      const payload = {
         descripcion: hitoForm.descripcion,
         importeEstimado: Number(hitoForm.importeEstimado || 0),
         fechaReferencia: new Date(hitoForm.fechaReferencia).toISOString(),
         observaciones: hitoForm.observaciones
-      });
-      setDetalle((prev) => ({
-        ...prev,
-        vias: prev.vias.map((via) => (
-          via.id === selectedVia.id
-            ? { ...via, hitos: [...(via.hitos || []), nuevoHito].sort((a, b) => new Date(a.fechaReferencia) - new Date(b.fechaReferencia)) }
-            : via
-        ))
-      }));
+      };
+      if (hitoEditando && hitoEditando.importeAplicado > selectedVia.saldoPendiente)
+        throw new Error('No se puede editar el hito: sus pagos asignados superan el saldo actual del plan.');
+      if (payload.importeEstimado > selectedVia.saldoPendiente)
+        throw new Error('El importe del hito no puede superar el saldo actual del plan.');
+      if (hitoEditando) await acuerdosService.actualizarHitoVia(selectedVia.id, hitoEditando.id, payload);
+      else await acuerdosService.crearHitoVia(selectedVia.id, payload);
+      cancelarEdicionHito();
       await refreshDetalle();
-      setSuccess('Hito comercial registrado correctamente.');
-      setHitoForm({ descripcion: '', importeEstimado: '', fechaReferencia: '', observaciones: '' });
+      setSuccess('Hito comercial guardado correctamente.');
     } catch (err) {
-      setPlanError(getApiError(err, 'No se pudo registrar el hito comercial.'));
+      setPlanError(getApiError(err, 'No se pudo guardar el hito comercial.'));
+    } finally {
+      setHitoLoading(false);
+    }
+  };
+
+  const handleEliminarHito = async (hito) => {
+    if (hitoLoading || !window.confirm('¿Eliminar el hito "' + hito.descripcion + '"? Esta acción no se puede deshacer.')) return;
+    setHitoLoading(true);
+    setPlanError('');
+    setSuccess('');
+    try {
+      await acuerdosService.eliminarHitoVia(selectedVia.id, hito.id);
+      if (hitoEditando?.id === hito.id) cancelarEdicionHito();
+      await refreshDetalle();
+      setSuccess('Hito comercial eliminado correctamente.');
+    } catch (err) {
+      setPlanError(getApiError(err, 'No se pudo eliminar el hito comercial.'));
     } finally {
       setHitoLoading(false);
     }
@@ -374,7 +399,8 @@ const AcuerdoDetallePage = () => {
             key={via.id}
             className={via.id === selectedVia?.id ? 'active' : ''}
             type="button"
-            onClick={() => setSelectedViaId(via.id)}
+            disabled={hitoLoading}
+            onClick={() => { cancelarEdicionHito(); setSelectedViaId(via.id); }}
           >
             {via.viaOperacion} - {via.monedaCodigo}
           </button>
@@ -400,27 +426,34 @@ const AcuerdoDetallePage = () => {
             <EstadoComercialResumen estado={estadoComercial} />
           </SectionCard>
 
-          {selectedVia.viaOperacion === 'Via1' && (
+          {selectedVia.viaOperacion === 'Via1' && selectedVia.modalidadCobro === 'Planificada' && (
             <SectionCard title="Situacion Via 1" description="Resumen de plan, facturacion y cobranzas confirmadas de la via.">
               <SituacionVia1Panel acuerdoId={Number(id)} enabled={selectedVia.viaOperacion === 'Via1'} />
             </SectionCard>
           )}
 
-          {isBorrador && (
-            <SectionCard title="Modificar monto de la via" description="Antes de aprobar, puede recalcular las cuotas pendientes.">
+          {selectedVia.viaOperacion === 'Via1' && selectedVia.modalidadCobro === 'Abierta' && (
+            <SectionCard title="Facturación y cobranza de hitos" description="Situación del acuerdo abierto y trazabilidad por hito.">
+              <SituacionHitosPanel key={selectedVia.id} acuerdoId={Number(id)} via={selectedVia} onUpdated={setDetalle} />
+            </SectionCard>
+          )}
+
+          {(isBorrador || abiertaVigente) && (
+            <SectionCard title="Modificar monto de la via" description={selectedVia.modalidadCobro === 'Abierta' ? 'El nuevo monto debe cubrir los pagos vigentes y dejar saldo suficiente para los hitos existentes. El cambio queda registrado con su motivo.' : 'Antes de aprobar, puede recalcular las cuotas pendientes.'}>
               <form className="report-filter-grid" onSubmit={handleModificarMonto}>
                 <div className="form-field">
                   <label>Nuevo monto</label>
-                  <input type="number" min="0.01" step="0.01" value={montoForm.nuevoMonto} onChange={(e) => setMontoForm((prev) => ({ ...prev, nuevoMonto: e.target.value }))} required />
+                  <input type="number" min={selectedVia.modalidadCobro === 'Abierta' ? Math.max(0.01, minimoMontoAbierto) : 0.01} step="0.01" value={montoForm.nuevoMonto} onChange={(e) => setMontoForm((prev) => ({ ...prev, nuevoMonto: e.target.value }))} required />
                 </div>
                 <div className="form-field full-width">
                   <label>Motivo</label>
                   <input value={montoForm.motivo} onChange={(e) => setMontoForm((prev) => ({ ...prev, motivo: e.target.value }))} required />
                 </div>
-                <label className="via-toggle">
+                {selectedVia.modalidadCobro === 'Abierta' && <p>Monto mínimo actual: {currency(Math.max(0.01, minimoMontoAbierto), selectedVia.monedaCodigo)}.</p>}
+                {selectedVia.modalidadCobro !== 'Abierta' && <label className="via-toggle">
                   <input type="checkbox" checked={montoForm.refinanciarCuotasPendientes} onChange={(e) => setMontoForm((prev) => ({ ...prev, refinanciarCuotasPendientes: e.target.checked }))} />
                   Refinanciar cuotas pendientes
-                </label>
+                </label>}
                 <div className="form-footer full-width">
                   <button className="btn-primary" type="submit" disabled={montoLoading}>
                     {montoLoading ? 'Actualizando...' : 'Modificar monto'}
@@ -494,7 +527,7 @@ const AcuerdoDetallePage = () => {
             </SectionCard>
           )}
 
-          <SectionCard title="Pagos aplicados" description="Pagos comerciales registrados para esta via.">
+          {!(selectedVia.viaOperacion === 'Via1' && selectedVia.modalidadCobro === 'Abierta') && <SectionCard title="Pagos aplicados" description="Pagos comerciales registrados para esta via.">
             {selectedVia.viaOperacion === 'Via1' && (
               <div className="alert-box">Los pagos de Via1 se registran desde el modulo Ventas.</div>
             )}
@@ -561,18 +594,20 @@ const AcuerdoDetallePage = () => {
             ) : (
               <p className="empty-state">Aun no se registran pagos para esta via.</p>
             )}
-          </SectionCard>
+          </SectionCard>}
 
           {selectedVia.modalidadCobro === 'Abierta' && (
-            <SectionCard title="Hitos comerciales" description="Clasificadores opcionales para pagos de Via2.">
-              <form className="report-filter-grid" onSubmit={handleCrearHito}>
+            <SectionCard title="Hitos comerciales" description={selectedVia.viaOperacion === 'Via1' ? 'Hitos del acuerdo abierto de Vía 1.' : 'Clasificadores opcionales para pagos de Via2.'}>
+              {hitoEditando && <p>Editando: {hitoEditando.descripcion}. Monto mínimo: {currency(hitoEditando.importeAplicado, selectedVia.monedaCodigo)}.</p>}
+              {hitoEditando?.importeAplicado > selectedVia.saldoPendiente && <p role="alert">No se puede editar este hito: sus pagos asignados superan el saldo actual del plan.</p>}
+              <form id="hitos" className="report-filter-grid" onSubmit={handleCrearHito}>
                 <div className="form-field">
                   <label>Descripcion</label>
                   <input value={hitoForm.descripcion} onChange={(e) => setHitoForm((prev) => ({ ...prev, descripcion: e.target.value }))} required />
                 </div>
                 <div className="form-field">
-                  <label>Importe estimado</label>
-                  <input type="number" min="0" step="0.01" value={hitoForm.importeEstimado} onChange={(e) => setHitoForm((prev) => ({ ...prev, importeEstimado: e.target.value }))} />
+                  <label>Importe estimado (máximo: {currency(selectedVia.saldoPendiente, selectedVia.monedaCodigo)})</label>
+                  <input type="number" min={hitoEditando?.importeAplicado || 0} max={selectedVia.saldoPendiente} step="0.01" value={hitoForm.importeEstimado} onChange={(e) => setHitoForm((prev) => ({ ...prev, importeEstimado: e.target.value }))} />
                 </div>
                 <div className="form-field">
                   <label>Fecha referencia</label>
@@ -583,7 +618,8 @@ const AcuerdoDetallePage = () => {
                   <input value={hitoForm.observaciones} onChange={(e) => setHitoForm((prev) => ({ ...prev, observaciones: e.target.value }))} />
                 </div>
                 <div className="form-footer full-width">
-                  <button className="btn-primary" type="submit" disabled={hitoLoading}>{hitoLoading ? 'Guardando...' : 'Agregar hito'}</button>
+                  <button className="btn-primary" type="submit" disabled={hitoLoading || hitoEditando?.importeAplicado > selectedVia.saldoPendiente}>{hitoLoading ? 'Guardando...' : hitoEditando ? 'Guardar cambios del hito' : 'Agregar hito'}</button>
+                  {hitoEditando && <button type="button" className="btn-secondary" disabled={hitoLoading} onClick={cancelarEdicionHito}>Cancelar edición</button>}
                 </div>
               </form>
 
@@ -595,8 +631,10 @@ const AcuerdoDetallePage = () => {
                         <th>Fecha</th>
                         <th>Descripcion</th>
                         <th>Estimado</th>
-                        <th>Aplicado</th>
+                        <th>{selectedVia.viaOperacion === 'Via1' ? 'Cobrado neto' : 'Aplicado'}</th>
+                        {selectedVia.viaOperacion === 'Via1' && <><th>Facturado neto</th><th>Reservado</th><th>Disponible para facturar</th></>}
                         <th>Estado</th>
+                        <th>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -606,7 +644,16 @@ const AcuerdoDetallePage = () => {
                           <td>{hito.descripcion}</td>
                           <td>{currency(hito.importeEstimado, selectedVia.monedaCodigo)}</td>
                           <td>{currency(hito.importeAplicado, selectedVia.monedaCodigo)}</td>
+                          {selectedVia.viaOperacion === 'Via1' && <><td>{currency(hito.importeFacturado, selectedVia.monedaCodigo)}</td><td>{currency(hito.importeReservado, selectedVia.monedaCodigo)}</td><td>{currency(hito.saldoFacturable, selectedVia.monedaCodigo)}</td></>}
                           <td>{hito.estado}</td>
+                          <td>
+                            <button type="button" className="btn-secondary" disabled={hitoLoading} onClick={() => {
+                              setHitoEditando(hito);
+                              setHitoForm({ descripcion: hito.descripcion, importeEstimado: hito.importeEstimado,
+                                fechaReferencia: hito.fechaReferencia.slice(0, 10), observaciones: hito.observaciones || '' });
+                            }}>Editar</button>
+                            <button type="button" className="btn-secondary" title={hito.tieneFacturasAsociadas ? 'No se puede eliminar: tiene facturas asociadas.' : hito.tienePagosAsociados ? 'No se puede eliminar: tiene pagos asociados, incluso anulados.' : 'Eliminar hito'} disabled={hitoLoading || hito.tienePagosAsociados || hito.tieneFacturasAsociadas} onClick={() => handleEliminarHito(hito)}>Eliminar</button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

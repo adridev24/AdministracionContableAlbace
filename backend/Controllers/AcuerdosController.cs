@@ -17,6 +17,14 @@ namespace BudgetControl.Api.Controllers
             _service = service;
         }
 
+        [HttpGet("{id}/vias/{viaId}/hitos/{hitoId}/detalle-facturacion")]
+        public async Task<IActionResult> GetDetalleFacturacionHito(int id, int viaId, int hitoId,
+            [FromServices] BudgetControl.Api.Data.AppDbContext db)
+        {
+            try { return Ok(await DetalleHitoVia1.ObtenerAsync(db, id, viaId, hitoId)); }
+            catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateAcuerdoRequest request)
         {
@@ -253,5 +261,20 @@ namespace BudgetControl.Api.Controllers
         {
             return Ok(await _service.GetHitosPorViaAsync(id));
         }
+
+        [HttpPut("/api/comercial/acuerdos-vias/{id}/hitos/{hitoId}")]
+        public async Task<IActionResult> UpdateHito(int id, int hitoId, [FromBody] CreateHitoComercialRequest request)
+        {
+            try { return Ok(await _service.ActualizarHitoAsync(id, hitoId, request)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        [HttpDelete("/api/comercial/acuerdos-vias/{id}/hitos/{hitoId}")]
+        public async Task<IActionResult> DeleteHito(int id, int hitoId)
+        {
+            try { await _service.EliminarHitoAsync(id, hitoId); return NoContent(); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
     }
 }

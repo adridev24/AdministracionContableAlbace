@@ -21,6 +21,20 @@ static class FacturaSimpleTests
         public Task<IEnumerable<Obra>> GetObrasAsync() => Task.FromResult<IEnumerable<Obra>>(new[] { new Obra { IdObra = 56, ClienteId = 1234 } });
         public Task<IEnumerable<Obra>> GetObrasByClientAsync(int id) => throw new NotSupportedException();
     }
+    internal static VentasService CreateService(AppDbContext ctx)
+    {
+        var user = new CurrentUserService(RevisionOperationTests.Identity());
+        var config = new ConfiguracionesContablesService(ctx,user);
+        var ext = new Clientes(); var calc = new CalculadorVentasService();
+        return new(ctx,ext,user,calc,new ContabilizacionAutomaticaService(ctx,config,new AsientosContablesService(ctx,user)),config,new PercepcionIibbService(ctx,ext,user,calc));
+    }
+    internal static CobranzasService CreateCobrosService(AppDbContext ctx)
+    {
+        var user = new CurrentUserService(RevisionOperationTests.Identity());
+        var config = new ConfiguracionesContablesService(ctx,user); var asientos = new AsientosContablesService(ctx,user);
+        var auto = new ContabilizacionAutomaticaService(ctx,config,asientos);
+        return new(ctx,user,new Clientes(),auto,asientos,config,new CarteraChequesService(ctx,user,auto));
+    }
     internal static async Task Run(Func<AppDbContext> create, Action<bool,string> check)
     {
         var now = DateTime.UtcNow;
@@ -32,12 +46,7 @@ static class FacturaSimpleTests
             RegimenPercepcionIibb=new(){Codigo="T",Descripcion="Test", NumeroRegimen="1", Porcentaje=2,VigenciaDesde=now.Date.AddDays(-1),UsuarioAlta="test",FechaAlta=now} });
         await db.SaveChangesAsync();
         var r = new FacturaSimpleRequest {ClienteExternoId="1234",ObraExternaId="56",FechaComprobante=now,NumeroComprobante=1,PuntoVenta=321,PuntoVentaComprobanteId=punto.Id,TipoComprobanteVentaId=punto.TipoComprobanteVentaId, Lineas=new(){new(tasas[0].Id,100),new(tasas[1].Id,200)},NoGravado=10,Exento=5,DevolucionCheques=20};
-        VentasService Service(AppDbContext ctx) {
-            var user = new CurrentUserService(RevisionOperationTests.Identity());
-            var config = new ConfiguracionesContablesService(ctx,user);
-            var ext = new Clientes(); var calc = new CalculadorVentasService();
-            return new(ctx,ext,user,calc,new ContabilizacionAutomaticaService(ctx,config,new AsientosContablesService(ctx,user)),config,new PercepcionIibbService(ctx,ext,user,calc));
-        }
+        VentasService Service(AppDbContext ctx) => CreateService(ctx);
         await using (var failed = create()) {
             try { await Service(failed).RegistrarSimpleAsync(r); throw new Exception("Missing accounting configuration accepted"); }
             catch(InvalidOperationException ex) when(ex.Message.Contains("FACTURA_VENTA")) { }
@@ -48,6 +57,50 @@ static class FacturaSimpleTests
         db.Add(cfg); await db.SaveChangesAsync();
         r.RegimenPercepcionIibbId = await db.PercepcionesIibbEntreRios.Where(x => x.Codigo == "T").Select(x => x.Id).SingleAsync();
         r.CotizacionDolarReferencia = 1450.753m;
+        // Open Via1 agreements require hitos even when ordinary installments coexist.
+        var openPlan = await RevisionOperationTests.Seed(create, 2);
+        await using (var setup = create())
+        {
+            var via = await setup.AcuerdosComercialesVias.Include(v => v.AcuerdoComercial).SingleAsync(v => v.Id == openPlan.AcuerdoComercialViaId);
+            via.ViaOperacion = BudgetControl.Api.Models.Commercial.ViaOperacion.Via1;
+            via.ModalidadCobro = BudgetControl.Api.Models.Commercial.ModalidadCobro.Abierta;
+            via.AcuerdoComercial.ClienteExternoId = "1234"; via.AcuerdoComercial.ObraExternaId = "56";
+            setup.PlanesPago.Remove(await setup.PlanesPago.SingleAsync(p => p.Id == openPlan.Id));
+            await setup.SaveChangesAsync();
+        }
+        await using (var rejected = create())
+        {
+            try { await Service(rejected).CreateVentaAsync(r); throw new Exception("Empty open agreement allowed draft creation"); }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("Debe crear al menos un hito"))
+            { check(true, "API draft creation requires hitos for existing open Via1 agreement"); }
+        }
+        var coexistPlan = await RevisionOperationTests.Seed(create, 2);
+        await using (var setup = create())
+        {
+            var via = await setup.AcuerdosComercialesVias.Include(v => v.AcuerdoComercial).SingleAsync(v => v.Id == coexistPlan.AcuerdoComercialViaId);
+            via.ViaOperacion = BudgetControl.Api.Models.Commercial.ViaOperacion.Via1;
+            via.AcuerdoComercial.ClienteExternoId = "1234"; via.AcuerdoComercial.ObraExternaId = "56";
+            await setup.SaveChangesAsync();
+        }
+        await using (var rejected = create())
+        {
+            try { await Service(rejected).RegistrarSimpleAsync(r); throw new Exception("Planned quotas bypassed open hitos requirement"); }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("Debe crear al menos un hito"))
+            { check(true, "simple invoice blocked without open hitos even with planned quotas"); }
+        }
+        check(!await db.Ventas.AnyAsync(v => v.ClienteExternoId == "1234"), "missing-hito rejection leaves no invoice or accounting effects");
+        await using (var setup = create())
+        {
+            var plannedVia = await setup.AcuerdosComercialesVias.SingleAsync(v => v.Id == coexistPlan.AcuerdoComercialViaId);
+            plannedVia.Estado = BudgetControl.Api.Models.Commercial.AcuerdoEstado.Finalizado;
+            setup.HitosComercialesVias.Add(new() { AcuerdoComercialViaId = openPlan.AcuerdoComercialViaId,
+                Descripcion = "Hito requerido", ImporteEstimado = 100, FechaReferencia = now, FechaAlta = now, UsuarioAlta = "test" });
+            await setup.SaveChangesAsync();
+        }
+        // The remaining scenarios below exercise the pre-existing unallocated/plan invoice paths.
+        await using (var closeOpen = create())
+            await closeOpen.AcuerdosComercialesVias.Where(v => v.Id == openPlan.AcuerdoComercialViaId)
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.Estado, BudgetControl.Api.Models.Commercial.AcuerdoEstado.Finalizado));
         await using var registro = create();
         var venta = await Service(registro).RegistrarSimpleAsync(r);
         check(venta.Total==383 && venta.TotalPercepciones==6 && venta.FiscalSimple?.Lineas.Count==2 && venta.AsientoContableId.HasValue,"register invoice, VAT and IIBB with accounting entry");

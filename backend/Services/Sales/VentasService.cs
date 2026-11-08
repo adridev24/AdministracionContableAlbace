@@ -1,3 +1,4 @@
+using BudgetControl.Api.Services.Commercial;
 using BudgetControl.Api.Data;
 using BudgetControl.Api.DTOs.Accounting;
 using BudgetControl.Api.DTOs.Sales;
@@ -724,6 +725,7 @@ namespace BudgetControl.Api.Services.Sales
         public async Task<VentaResponse> CreateVentaAsync(VentaHeaderRequest request)
         {
             var normalized = await ValidateRequestAsync(request, null);
+            await EnsureHitosAbiertosParaFacturaAsync(normalized.Cliente.IdCliente.ToString(), normalized.Obra.IdObra.ToString(), NormalizeCurrency(request.MonedaCodigo));
             var usuario = _userContext.UserName;
 
             var venta = new Venta
@@ -776,6 +778,8 @@ namespace BudgetControl.Api.Services.Sales
             if (venta.Total <= 0) throw new InvalidOperationException("El total debe ser positivo.");
             await _db.SaveChangesAsync();
             await _iibb.CalcularAsync(venta.Id, request.RegimenPercepcionIibbId);
+            if (request.Aplicaciones.Any() && request.AplicacionesHitos.Any()) throw new InvalidOperationException("Seleccione cuotas o hitos para la factura, no ambas modalidades.");
+            if (request.AplicacionesHitos.Any()) await UpdateVinculacionesHitosAsync(venta.Id, request.AplicacionesHitos);
             if (request.Aplicaciones.Any()) await UpdateVinculacionesPlanAsync(venta.Id, request.Aplicaciones);
             var result = await ConfirmarVentaAsync(venta.Id);
             await tx.CommitAsync();
@@ -800,6 +804,7 @@ namespace BudgetControl.Api.Services.Sales
             if (venta.Estado != VentaEstado.Borrador) throw new InvalidOperationException("Solo una venta en estado Borrador puede modificarse.");
 
             var normalized = await ValidateRequestAsync(request, id);
+            await EnsureHitosAbiertosParaFacturaAsync(normalized.Cliente.IdCliente.ToString(), normalized.Obra.IdObra.ToString(), NormalizeCurrency(request.MonedaCodigo));
             if (venta.Detalles.Any() && normalized.Relacion.Id != venta.PuntoVentaComprobanteId)
             {
                 throw new InvalidOperationException("No se puede cambiar la configuracion de comprobante o punto de venta porque la venta ya posee detalles.");
@@ -929,6 +934,44 @@ namespace BudgetControl.Api.Services.Sales
 
             return await DisponiblesAsync(venta);
         }
+        private async Task EnsureHitosAbiertosParaFacturaAsync(string cliente, string obra, string moneda)
+        {
+            var abiertos = await GetAcuerdosAbiertosVia1Async(cliente, obra, moneda);
+            var faltantes = abiertos.Where(a => a.Hitos.Count == 0).Select(a => a.NumeroAcuerdo).ToList();
+            if (faltantes.Count > 0)
+                throw new InvalidOperationException("Debe crear al menos un hito en cada acuerdo abierto de Via 1 antes de guardar la factura: " + string.Join(", ", faltantes) + ".");
+        }
+
+        public async Task<IEnumerable<AcuerdoAbiertoFacturaResponse>> GetAcuerdosAbiertosVia1Async(string cliente, string obra, string moneda, int ventaActual = 0)
+        {
+            if (string.IsNullOrWhiteSpace(cliente) || string.IsNullOrWhiteSpace(obra))
+                return new List<AcuerdoAbiertoFacturaResponse>();
+            moneda = (moneda ?? "").Trim().ToUpperInvariant();
+            var vias = await _db.AcuerdosComercialesVias.AsNoTracking()
+                .Include(v => v.AcuerdoComercial).Include(v => v.Hitos)
+                .Where(v => v.ViaOperacion == ViaOperacion.Via1 && v.ModalidadCobro == ModalidadCobro.Abierta)
+                .Where(v => v.Estado != AcuerdoEstado.Anulado && v.Estado != AcuerdoEstado.Finalizado &&
+                    v.AcuerdoComercial.Estado != AcuerdoEstado.Anulado && v.AcuerdoComercial.Estado != AcuerdoEstado.Finalizado)
+                .Where(v => v.AcuerdoComercial.ClienteExternoId == cliente && v.AcuerdoComercial.ObraExternaId == obra)
+                .Where(v => v.MonedaCodigo == moneda || (moneda == "ARS" && v.MonedaCodigo == "USD"))
+                .OrderBy(v => v.AcuerdoComercial.NumeroAcuerdo).ThenBy(v => v.Id).ToListAsync();
+            var balances = await SaldosHitosVia1.ObtenerAsync(_db, vias.SelectMany(v => v.Hitos).Select(h => h.Id), ventaActual);
+            return vias.Select(v => new AcuerdoAbiertoFacturaResponse
+            {
+                AcuerdoId = v.AcuerdoComercialId, ViaId = v.Id, NumeroAcuerdo = v.AcuerdoComercial.NumeroAcuerdo,
+                MonedaCodigo = v.MonedaCodigo, MontoActual = v.MontoActual, Estado = v.Estado.ToString(),
+                SaldoFacturable = Math.Max(0, v.MontoActual - v.Hitos.Sum(h => balances[h.Id].Facturado + balances[h.Id].Reservado)),
+                Hitos = v.Hitos.OrderBy(h => h.FechaReferencia).ThenBy(h => h.Id).Select(h => new HitoFacturaConsultaResponse
+                {
+                    Id = h.Id, Descripcion = h.Descripcion, ImporteEstimado = h.ImporteEstimado,
+                    Facturado = balances[h.Id].Facturado, Reservado = balances[h.Id].Reservado, Cobrado = balances[h.Id].Cobrado,
+                    SaldoDisponible = Math.Max(0, h.ImporteEstimado - balances[h.Id].Facturado - balances[h.Id].Reservado),
+                    ImporteAplicadoFacturaActual = balances[h.Id].FacturaActual,
+                    FechaReferencia = h.FechaReferencia, Estado = h.Estado.ToString()
+                }).ToList()
+            }).ToList();
+        }
+
         public async Task<IEnumerable<VentaObligacionVia1DisponibleResponse>> DisponiblesAsync(Venta venta)
         {
             var obligaciones = await GetObligacionesVia1CompatiblesQuery(venta)
@@ -961,6 +1004,19 @@ namespace BudgetControl.Api.Services.Sales
             return vinculaciones.Select(MapVinculacionPlan).ToList();
         }
 
+        public async Task<List<FacturaHitoResponse>> GetVinculacionesHitosAsync(int ventaId) => await new FacturacionHitosService(_db).GetAsync(ventaId);
+
+        public async Task<List<FacturaHitoResponse>> UpdateVinculacionesHitosAsync(int ventaId, List<FacturaHitoRequest> request)
+        {
+            await using var tx = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+            var venta = await GetVentaQuery(false).FirstOrDefaultAsync(v => v.Id == ventaId) ?? throw new InvalidOperationException("Factura no encontrada.");
+            _calculador.RecalcularTotales(venta);
+            var service = new FacturacionHitosService(_db);
+            await service.GuardarAsync(venta, request, _userContext.UserName);
+            if (tx != null) await tx.CommitAsync();
+            return await service.GetAsync(ventaId);
+        }
+
         public async Task<IEnumerable<VentaVinculacionPlanResponse>> UpdateVinculacionesPlanAsync(int ventaId, IEnumerable<VentaVinculacionPlanRequest> request)
         {
             await using var transaction = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
@@ -974,6 +1030,8 @@ namespace BudgetControl.Api.Services.Sales
 
             _calculador.RecalcularTotales(venta);
             var aplicaciones = NormalizeVinculacionesRequest(request);
+            if (aplicaciones.Any() && await _db.VinculacionesFacturasHitos.AnyAsync(x => x.VentaId == ventaId))
+                throw new InvalidOperationException("Quite primero las imputaciones a hitos para imputar a cuotas.");
             await ValidateVinculacionesPlanAsync(venta, aplicaciones, requireCompleteAmount: false);
 
             var facturaId = BuildFacturaExternaId(venta.Id);
@@ -1217,6 +1275,17 @@ namespace BudgetControl.Api.Services.Sales
 
         private async Task<int> ValidateVinculacionesPlanForConfirmacionAsync(Venta venta)
         {
+            await EnsureHitosAbiertosParaFacturaAsync(venta.ClienteExternoId, venta.ObraExternaId, venta.MonedaCodigo);
+            var hitosService = new FacturacionHitosService(_db);
+            var hitos = await hitosService.GetAsync(venta.Id);
+            if (hitos.Any())
+            {
+                await hitosService.ValidarAsync(venta, hitos.Select(h => new FacturaHitoRequest { HitoId = h.HitoId, Importe = h.Importe }).ToList(), true);
+                return hitos.Count;
+            }
+            if (!await GetObligacionesVia1CompatiblesQuery(venta).AnyAsync() &&
+                (await GetAcuerdosAbiertosVia1Async(venta.ClienteExternoId, venta.ObraExternaId, venta.MonedaCodigo)).Any() && ImputacionPlanFactura.Neto(venta) > 0)
+                throw new InvalidOperationException("Distribuya el neto de la factura entre los hitos del acuerdo abierto.");
             var vinculaciones = await GetVinculacionesPlanQuery(venta.Id)
                 .AsNoTracking()
                 .Select(v => new VentaVinculacionPlanRequest

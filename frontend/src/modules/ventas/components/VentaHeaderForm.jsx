@@ -1,9 +1,12 @@
+import useAcuerdosAbiertosVia1 from '../hooks/useAcuerdosAbiertosVia1';
+import AcuerdosAbiertosVia1 from './AcuerdosAbiertosVia1';
 import { todayArgentina } from '../../../shared/utils/calendarDate';
 import NumericInput from '../../../shared/components/NumericInput';
 import AlicuotaIibbSelect from './AlicuotaIibbSelect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ClienteObraSelector from '../../comercial/components/ClienteObraSelector';
 import ventasService from '../services/ventasService';
+import acuerdosService from '../../comercial/services/acuerdosService';
 
 const initialForm = {
   tipoComprobanteVentaId: '',
@@ -42,6 +45,23 @@ const buildInitialForm = (selectedVenta) => {
 
 const VentaHeaderForm = ({ tiposComprobante, selectedVenta, saving, onCancel, onSubmit }) => {
   const [form, setForm] = useState(() => buildInitialForm(selectedVenta));
+  const abiertos = useAcuerdosAbiertosVia1(form.clienteExternoId, form.obraExternoId, form.monedaCodigo);
+  const [consultaAcuerdos, setConsultaAcuerdos] = useState(null);
+  const claveAcuerdos = JSON.stringify([form.clienteExternoId, form.obraExternoId]);
+  const sinAcuerdos = !selectedVenta && consultaAcuerdos?.clave === claveAcuerdos && consultaAcuerdos.sinAcuerdos;
+  useEffect(() => {
+    if (selectedVenta || !form.clienteExternoId || !form.obraExternoId) return;
+    let active = true;
+    const load = () => acuerdosService.getAcuerdosPorCliente(form.clienteExternoId)
+      .then(rows => {
+        if (active) setConsultaAcuerdos({ clave: claveAcuerdos,
+          sinAcuerdos: !rows.some(a => String(a.obraExternaId) === String(form.obraExternoId)) });
+      })
+      .catch(() => { if (active) setConsultaAcuerdos(null); });
+    load();
+    window.addEventListener('focus', load);
+    return () => { active = false; window.removeEventListener('focus', load); };
+  }, [selectedVenta, form.clienteExternoId, form.obraExternoId, claveAcuerdos]);
   const [puntosVenta, setPuntosVenta] = useState([]);
   const [loadingPuntos, setLoadingPuntos] = useState(false);
   const [puntosError, setPuntosError] = useState('');
@@ -62,13 +82,18 @@ const VentaHeaderForm = ({ tiposComprobante, selectedVenta, saving, onCancel, on
   const [loadingObligaciones, setLoadingObligaciones] = useState(false);
   const [errorObligaciones, setErrorObligaciones] = useState('');
   const [aplicado, setAplicado] = useState({});
+  const [aplicadoHitos, setAplicadoHitos] = useState({});
+  const [modo, setModo] = useState('cuotas');
+  const [monedaHitos, setMonedaHitos] = useState('ARS');
+  const modoHitos = abiertos.rows.length > 0 && (obligaciones.length === 0 || modo === 'hitos');
+  const monedaHitoActual = abiertos.rows.some(a => a.monedaCodigo === monedaHitos) ? monedaHitos : abiertos.rows[0]?.monedaCodigo || 'ARS';
   const [errorFiscal, setErrorFiscal] = useState('');
   useEffect(() => {
     if (!selectedVenta) ventasService.getAlicuotasIva({soloActivos:true}).then(rows => setTasas(rows.filter(r => r.tipoTratamiento === 'Gravado'))).catch(() => setErrorFiscal('No se pudieron cargar las alícuotas.'));
   }, [selectedVenta]);
   useEffect(() => {
     let actual = true;
-    setObligaciones([]); setAplicado({});
+    setObligaciones([]); setAplicado({}); setAplicadoHitos({});
     setErrorObligaciones('');
     setLoadingObligaciones(false);
     if (!selectedVenta && form.clienteExternoId && form.obraExternoId) {
@@ -187,7 +212,14 @@ const VentaHeaderForm = ({ tiposComprobante, selectedVenta, saving, onCancel, on
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    if (!isEditing && obligaciones.length > 0 && neto > 0 &&
+    if (abiertos.bloqueado) { setErrorFiscal(abiertos.mensaje); return; }
+    if (!isEditing && modoHitos) {
+      const tasa = monedaHitoActual === 'USD' ? Number(referencia) : 1;
+      const objetivo = tasa > 0 ? Math.round(neto / tasa * 100) : -1;
+      const imputado = Math.round(Object.values(aplicadoHitos).reduce((total, x) => total + Number(x || 0), 0) * 100);
+      if (!(tasa > 0) || imputado !== objetivo) { setErrorFiscal('Distribuí el neto completo entre los hitos de la moneda elegida.'); return; }
+    }
+    if (!isEditing && !modoHitos && obligaciones.length > 0 && neto > 0 &&
         (!cotizacionPlan || Math.round(aplicadoPlan * 100) !== Math.round(netoPlan * 100))) {
       setErrorFiscal('Distribuí el neto completo en la moneda del plan antes de registrar.');
       return;
@@ -215,7 +247,8 @@ const VentaHeaderForm = ({ tiposComprobante, selectedVenta, saving, onCancel, on
       observaciones: form.observaciones,
       ...(!isEditing && {regimenPercepcionIibbId: regimenId ? Number(regimenId) : null, lineas:lineas.filter(l => l.neto || l.alicuotaId).map(l => ({neto:Number(l.neto), alicuotaId:Number(l.alicuotaId)})),
         ...Object.fromEntries(Object.entries(otros).map(([k,v]) => [k,Number(v)])),
-        aplicaciones:Object.entries(aplicado).filter(([,v]) => Number(v)>0).map(([id,v]) => ({obligacionId:Number(id),importeAplicado:Number(v)}))}),
+        aplicacionesHitos: modoHitos ? Object.entries(aplicadoHitos).filter(([,v]) => Number(v)>0).map(([id,v]) => ({hitoId:Number(id), importe:Number(v)})) : [],
+        aplicaciones:Object.entries(modoHitos ? {} : aplicado).filter(([,v]) => Number(v)>0).map(([id,v]) => ({obligacionId:Number(id),importeAplicado:Number(v)}))}),
     });
   };
 
@@ -301,7 +334,7 @@ const VentaHeaderForm = ({ tiposComprobante, selectedVenta, saving, onCancel, on
         <div className="form-field">
           {!isEditing && form.monedaCodigo === 'ARS' ? <>
             <label htmlFor="usd-referencia">Cotización de la factura · ARS por USD</label>
-            <NumericInput id="usd-referencia"  step="0.000001" min="0.000001" placeholder="Pesos por 1 USD" value={referencia} required={requiereConversion && cuotasPlan.length > 0 && neto > 0} onChange={e=>setReferencia(e.target.value)} />
+            <NumericInput id="usd-referencia"  step="0.000001" min="0.000001" placeholder="Pesos por 1 USD" value={referencia} required={neto > 0 && (modoHitos ? monedaHitoActual === 'USD' : requiereConversion && cuotasPlan.length > 0)} onChange={e=>setReferencia(e.target.value)} />
             <small className="field-help">Se utiliza para imputar el neto a cuotas en dólares.</small>
           </> : <><label>Cotización</label>
           <NumericInput
@@ -339,8 +372,13 @@ const VentaHeaderForm = ({ tiposComprobante, selectedVenta, saving, onCancel, on
           <span>Percepción IIBB <strong>{moneda(iibb)}</strong></span>
           <span>Total factura <strong>{moneda(subtotal + iibb)}</strong></span>
         </div>
-        <fieldset className="factura-importes">
-          <legend>Cuotas del plan de pago · Vía 1</legend>
+        {abiertos.rows.length > 0 && obligaciones.length > 0 && <label>Imputar esta factura a
+          <select value={modo} onChange={e => { setModo(e.target.value); setAplicado({}); setAplicadoHitos({}); }}>
+            <option value="cuotas">Anticipo y cuotas del plan</option><option value="hitos">Hitos del acuerdo abierto</option>
+          </select>
+        </label>}
+        {!modoHitos && <fieldset className="factura-importes">
+          <legend>{sinAcuerdos ? 'Facturación sin plan asociado' : 'Cuotas del plan de pago · Vía 1'}</legend>
           {!form.clienteExternoId || !form.obraExternoId ? (
             <p className="field-help">Seleccioná cliente y obra para consultar las cuotas que podés facturar.</p>
           ) : loadingObligaciones ? (
@@ -348,7 +386,9 @@ const VentaHeaderForm = ({ tiposComprobante, selectedVenta, saving, onCancel, on
           ) : errorObligaciones ? (
             <p className="form-error" role="alert">{errorObligaciones}</p>
           ) : obligaciones.length === 0 ? (
-            <p className="field-help">No hay cuotas con saldo disponible para facturar en Vía 1 para este cliente y obra.</p>
+            <p className="field-help">{sinAcuerdos
+              ? 'Este cliente no tiene planes ni acuerdos asociados a la obra seleccionada. La factura se registrará en su cuenta corriente y podrá cobrarse normalmente.'
+              : 'No hay cuotas con saldo disponible para facturar en Vía 1 para este cliente y obra.'}</p>
           ) : (
             <>
               <label className="form-field">Moneda del plan
@@ -382,8 +422,11 @@ const VentaHeaderForm = ({ tiposComprobante, selectedVenta, saving, onCancel, on
               </div>
             </>
           )}
-        </fieldset>
+        </fieldset>}
       </fieldset>}
+      <AcuerdosAbiertosVia1 consulta={abiertos} editable={!isEditing && modoHitos} aplicaciones={aplicadoHitos}
+        onChange={(id, value) => setAplicadoHitos(prev => ({ ...prev, [id]: value }))} moneda={monedaHitoActual}
+        onMonedaChange={value => { setMonedaHitos(value); setAplicadoHitos({}); }} neto={neto} referencia={referencia} />
       {isEditing && <div className="venta-state-line">
         <span>Estado</span>
         <strong>{selectedVenta?.estado}</strong>
@@ -395,7 +438,7 @@ const VentaHeaderForm = ({ tiposComprobante, selectedVenta, saving, onCancel, on
             Cancelar
           </button>
         )}
-        <button className="btn-primary" type="submit" disabled={saving || loadingPuntos || loadingObligaciones || Boolean(errorObligaciones) || !form.puntoVentaComprobanteId || Boolean(selectedPunto && !selectedPunto.habilitado)}>
+        <button className="btn-primary" type="submit" disabled={saving || abiertos.bloqueado || loadingPuntos || loadingObligaciones || Boolean(errorObligaciones) || !form.puntoVentaComprobanteId || Boolean(selectedPunto && !selectedPunto.habilitado)}>
           {saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Registrar factura'}
         </button>
       </div>

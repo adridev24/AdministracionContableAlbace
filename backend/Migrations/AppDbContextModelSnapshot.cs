@@ -2081,6 +2081,47 @@ namespace BudgetControl.Api.Migrations
                     b.ToTable("vinculaciones_factura_comerciales", (string)null);
                 });
 
+            modelBuilder.Entity("BudgetControl.Api.Models.Commercial.VinculacionFacturaHito", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("HitoId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Importe")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UsuarioAlta")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("VentaId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HitoId");
+
+                    b.HasIndex("VentaId", "HitoId")
+                        .IsUnique();
+
+                    b.ToTable("vinculaciones_facturas_hitos", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_factura_hito_importe", "\"Importe\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("BudgetControl.Api.Models.Role", b =>
                 {
                     b.Property<int>("Id")
@@ -4187,7 +4228,7 @@ namespace BudgetControl.Api.Migrations
                     b.HasOne("BudgetControl.Api.Models.Commercial.HitoComercialVia", "HitoComercialVia")
                         .WithMany("Aplicaciones")
                         .HasForeignKey("HitoComercialViaId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BudgetControl.Api.Models.Commercial.PagoComercial", "PagoComercial")
                         .WithMany("Aplicaciones")
@@ -4312,6 +4353,25 @@ namespace BudgetControl.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("CuotaComercial");
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Commercial.VinculacionFacturaHito", b =>
+                {
+                    b.HasOne("BudgetControl.Api.Models.Commercial.HitoComercialVia", "Hito")
+                        .WithMany()
+                        .HasForeignKey("HitoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BudgetControl.Api.Models.Sales.Venta", "Venta")
+                        .WithMany()
+                        .HasForeignKey("VentaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Hito");
+
+                    b.Navigation("Venta");
                 });
 
             modelBuilder.Entity("BudgetControl.Api.Models.Sales.ClientePercepcionIibbConfig", b =>

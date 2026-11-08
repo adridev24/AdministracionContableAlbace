@@ -1,3 +1,4 @@
+import { hasActiveSession } from './Services/authUtils';
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './Components/auth/Login';
@@ -9,7 +10,7 @@ import { tesoreriaRoutes } from './modules/tesoreria';
 import { ventasRoutes } from './modules/ventas';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(hasActiveSession);
 
   // Esta función se la pasaremos al Login para que nos avise cuando entrar
   const handleLoginSuccess = () => {
@@ -20,7 +21,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login onLoginSuccess={handleLoginSuccess} />} />
-        <Route path="/" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} />
+        <Route path="/" element={isAuthenticated ? <Dashboard onLogout={() => setIsAuthenticated(false)} /> : <Navigate to="/login" />} />
         {comercialRoutes.map((route) => (
           <Route
             key={route.path}

@@ -478,6 +478,20 @@ namespace BudgetControl.Api.Controllers.Sales
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         }
 
+        [HttpGet("{id}/vinculaciones-hitos")]
+        public async Task<IActionResult> GetHitosFactura(int id) => Ok(await _service.GetVinculacionesHitosAsync(id));
+
+        [HttpPut("{id}/vinculaciones-hitos")]
+        public async Task<IActionResult> PutHitosFactura(int id, [FromBody] List<FacturaHitoRequest> request)
+        {
+            try { return Ok(await _service.UpdateVinculacionesHitosAsync(id, request)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        [HttpGet("acuerdos-abiertos-via1")]
+        public async Task<IActionResult> AcuerdosAbiertosVia1(string cliente, string obra, string moneda, int ventaActual = 0) =>
+            Ok(await _service.GetAcuerdosAbiertosVia1Async(cliente, obra, moneda, ventaActual));
+
         [HttpGet("obligaciones-disponibles")]
         public async Task<IActionResult> Disponibles(string cliente, string obra, string moneda) =>
             Ok(await _service.DisponiblesAsync(new BudgetControl.Api.Models.Sales.Venta { ClienteExternoId = cliente, ObraExternaId = obra, MonedaCodigo = moneda }));
