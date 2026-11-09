@@ -8,6 +8,7 @@ import { contabilidadRoutes } from './modules/contabilidad';
 import { cobranzasRoutes } from './modules/cobranzas';
 import { tesoreriaRoutes } from './modules/tesoreria';
 import { ventasRoutes } from './modules/ventas';
+import ReportesFiscalesPage from './modules/reportesFiscales/ReportesFiscalesPage';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(hasActiveSession);
@@ -20,6 +21,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/reportes-fiscales" element={isAuthenticated ? <ReportesFiscalesPage /> : <Navigate to="/login" />} />
         <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login onLoginSuccess={handleLoginSuccess} />} />
         <Route path="/" element={isAuthenticated ? <Dashboard onLogout={() => setIsAuthenticated(false)} /> : <Navigate to="/login" />} />
         {comercialRoutes.map((route) => (

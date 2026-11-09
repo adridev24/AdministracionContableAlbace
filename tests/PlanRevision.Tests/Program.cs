@@ -49,7 +49,9 @@ try
     var hitoTarget = initializer.Initialize(hitoMigration.TargetModel, designTime: true);
     var facturaHitoMigration = new FacturasHitosVia1();
     var facturaHitoTarget = initializer.Initialize(facturaHitoMigration.TargetModel, designTime: true);
-    Check(!differ.HasDifferences(facturaHitoTarget.GetRelationalModel(), current.GetRelationalModel()), "latest migration matches current EF model");
+    var reportesMigration = new ReportesFiscalesVentas();
+    var reportesTarget = initializer.Initialize(reportesMigration.TargetModel, designTime: true);
+    Check(!differ.HasDifferences(reportesTarget.GetRelationalModel(), current.GetRelationalModel()), "latest migration matches current EF model");
     var snapshot = initializer.Initialize(db.GetService<IMigrationsAssembly>().ModelSnapshot!.Model, designTime: true);
     Check(!differ.HasDifferences(snapshot.GetRelationalModel(), current.GetRelationalModel()), "snapshot matches current EF model");
     foreach (var type in new[] { typeof(AcuerdoComercialVia), typeof(PlanPago), typeof(CuotaComercial) })
@@ -89,6 +91,7 @@ try
     foreach (var command in sqlGenerator.Generate(retencionesMigration.UpOperations, retencionesTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
     foreach (var command in sqlGenerator.Generate(hitoMigration.UpOperations, hitoTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
     foreach (var command in sqlGenerator.Generate(facturaHitoMigration.UpOperations, facturaHitoTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
+    foreach (var command in sqlGenerator.Generate(reportesMigration.UpOperations, reportesTarget)) await db.Database.ExecuteSqlRawAsync(command.CommandText);
     Check(await db.MediosPagoCobranza.CountAsync(m => m.Activo && (m.Codigo == "RETENCION_SUSS" || m.Codigo == "RETENCION_IVA")) == 2, "SUSS and IVA withholding methods available after migration");
     var fiscal = new BudgetControl.Api.DTOs.Sales.FiscalRegistrado(new() { new(1,100,21,21), new(2,200,10.5m,21) },10,5,20);
     var invoice = new BudgetControl.Api.Models.Sales.Venta { FiscalSimpleJson = System.Text.Json.JsonSerializer.Serialize(fiscal) };

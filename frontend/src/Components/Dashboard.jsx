@@ -4,6 +4,13 @@ import { getCurrentUser } from '../Services/authUtils';
 
 const modules = [
   {
+    title: 'Reportes fiscales',
+    description: 'Libro IVA Ventas, archivos para IVA Simple, retenciones y conciliación.',
+    status: 'Disponible',
+    route: '/reportes-fiscales',
+    metric: 'Empresa / Ventas / Retenciones',
+  },
+  {
     title: 'Comercial',
     description: 'Acuerdos, planes de pago y condiciones comerciales.',
     status: 'Disponible',

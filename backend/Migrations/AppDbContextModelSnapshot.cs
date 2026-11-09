@@ -2122,6 +2122,202 @@ namespace BudgetControl.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BudgetControl.Api.Models.Fiscal.EmpresaFiscal", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Actividad")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("ActualizadoEl")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ActualizadoPor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CondicionIva")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Cuit")
+                        .IsRequired()
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)");
+
+                    b.Property<string>("DomicilioFiscal")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("InicioActividades")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InscripcionIibb")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("RazonSocial")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("reportes_empresa_fiscal", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_reportes_empresa_unica", "\"Id\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Fiscal.ExportacionFiscal", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("CantidadComprobantes")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("Contenido")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTime>("GeneradoEl")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GeneradoPor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("NombreArchivo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Periodo")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Periodo", "GeneradoEl");
+
+                    b.ToTable("reportes_exportaciones_fiscales", (string)null);
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Fiscal.RetencionFiscal", b =>
+                {
+                    b.Property<int>("CobranzaMedioPagoId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ActualizadoEl")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ActualizadoPor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Certificado")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("CuitAgente")
+                        .IsRequired()
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)");
+
+                    b.Property<DateTime>("FechaRetencion")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Jurisdiccion")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PeriodoComputo")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("RazonSocialAgente")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Regimen")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("CobranzaMedioPagoId");
+
+                    b.HasIndex("PeriodoComputo");
+
+                    b.ToTable("reportes_retenciones_fiscales", (string)null);
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Fiscal.VentaFiscal", b =>
+                {
+                    b.Property<int>("VentaId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ActualizadoEl")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ActualizadoPor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CodigoOperacion")
+                        .IsRequired()
+                        .HasMaxLength(1)
+                        .HasColumnType("character varying(1)");
+
+                    b.Property<string>("CondicionIva")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("DevolucionChequeRevisada")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Documento")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RazonSocial")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("TipoComprobanteArca")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TipoDocumento")
+                        .HasColumnType("integer");
+
+                    b.HasKey("VentaId");
+
+                    b.ToTable("reportes_ventas_fiscales", (string)null);
+                });
+
             modelBuilder.Entity("BudgetControl.Api.Models.Role", b =>
                 {
                     b.Property<int>("Id")
@@ -4372,6 +4568,24 @@ namespace BudgetControl.Api.Migrations
                     b.Navigation("Hito");
 
                     b.Navigation("Venta");
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Fiscal.RetencionFiscal", b =>
+                {
+                    b.HasOne("BudgetControl.Api.Models.Collections.CobranzaMedioPago", null)
+                        .WithMany()
+                        .HasForeignKey("CobranzaMedioPagoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BudgetControl.Api.Models.Fiscal.VentaFiscal", b =>
+                {
+                    b.HasOne("BudgetControl.Api.Models.Sales.Venta", null)
+                        .WithMany()
+                        .HasForeignKey("VentaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BudgetControl.Api.Models.Sales.ClientePercepcionIibbConfig", b =>

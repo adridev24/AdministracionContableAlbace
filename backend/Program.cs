@@ -96,6 +96,7 @@ builder.Services.AddScoped<ICalculadorVentasService, CalculadorVentasService>();
 builder.Services.AddScoped<IPercepcionIibbService, PercepcionIibbService>();
 builder.Services.AddScoped<ICuentaCorrienteClientesService, CuentaCorrienteClientesService>();
 builder.Services.AddScoped<IVentasService, VentasService>();
+builder.Services.AddScoped<BudgetControl.Api.Services.Fiscal.ReportesFiscalesService>();
 
 var app = builder.Build();
 

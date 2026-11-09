@@ -63,6 +63,7 @@ namespace BudgetControl.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            ReportesFiscalesConfiguration.Configure(modelBuilder);
             modelBuilder.Entity<VinculacionFacturaHito>(e =>
             {
                 e.ToTable("vinculaciones_facturas_hitos", t => t.HasCheckConstraint("CK_factura_hito_importe", "\"Importe\" > 0"));

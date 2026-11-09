@@ -1,0 +1,34 @@
+.fiscal-page { max-width: 1600px; margin: auto; }
+.fiscal-tabs, .fiscal-actions, .fiscal-summary, .fiscal-periodo { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 16px 0; }
+.fiscal-tabs { border-bottom: 1px solid #d5dce6; padding-bottom: 10px; }
+.fiscal-tabs button { padding: 10px 16px; background: white; border: 1px solid #c8d2de; border-radius: 7px; color: #334155; cursor: pointer; }
+.fiscal-tabs button[aria-current] { background: #163c60; color: white; border-color: #163c60; }
+.fiscal-page button:disabled { opacity: .5; cursor: not-allowed; }
+.fiscal-scope { padding: 12px 16px; border-left: 4px solid #4b7599; background: #eef4f8; color: #314a60; }
+.fiscal-summary { padding: 14px; background: #f1f5f9; border-radius: 8px; justify-content: space-between; }
+.fiscal-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; padding: 0; margin: 16px 0; border: none; }
+.fiscal-campo, .fiscal-periodo label { display: flex; flex-direction: column; gap: 6px; color: #334155; font-weight: 600; }
+.fiscal-page input, .fiscal-page select { padding: 10px; border: 1px solid #b8c5d2; border-radius: 6px; background: white; color: #152e43; min-width: 0; }
+.fiscal-page input[type=file] { max-width: 100%; }
+.fiscal-periodo { align-items: end; }
+.fiscal-checkbox { display: flex; align-items: center; gap: 10px; grid-column: 1 / -1; }
+.fiscal-editor { border: 1px solid #b8c5d2; background: #f8fafc; padding: 20px; border-radius: 8px; margin: 18px 0; }
+.fiscal-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fiscal-observaciones { padding-left: 24px; max-height: 420px; overflow: auto; }
+.fiscal-observaciones li { margin: 8px 0; }
+.fiscal-error { color: #a52222; }
+.fiscal-success { padding: 12px; background: #e6f6ed; color: #185b36; }
+.fiscal-hash { overflow-wrap: anywhere; font-size: .75rem; }
+.fiscal-table td { vertical-align: top; }
+.fiscal-page .responsive-table-wrapper { overflow-x: auto; }
+@media print {
+  @page { size: landscape; margin: 10mm; }
+  .fiscal-tabs, .fiscal-no-print, .fiscal-editor { display: none !important; }
+  .fiscal-page { padding: 0; max-width: none; font-size: 9px; }
+  .fiscal-page .responsive-table-wrapper, .fiscal-observaciones { overflow: visible; max-height: none; }
+  .fiscal-page .data-table { min-width: 0; width: 100%; font-size: 8px; }
+  .fiscal-page .data-table td, .fiscal-page .data-table th { padding: 4px; }
+  .fiscal-page a { color: black; text-decoration: none; }
+  .fiscal-page thead { display: table-header-group; }
+  .fiscal-page tr { break-inside: avoid; }
+}
